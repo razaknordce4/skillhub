@@ -25,6 +25,10 @@ export default function PMTrainers({ isReadOnly = false }) {
   const [toast, setToast] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [institutions, setInstitutions] = useState([]);
+  const [selectedInstId, setSelectedInstId] = useState('');
+  const [customInstName, setCustomInstName] = useState('');
+  const [isOtherInst, setIsOtherInst] = useState(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -33,7 +37,17 @@ export default function PMTrainers({ isReadOnly = false }) {
   useEffect(() => {
     fetchTrainers();
     fetchGlobalSummary();
+    fetchInstitutions();
   }, []);
+
+  const fetchInstitutions = async () => {
+    try {
+      const res = await axios.get('/users?role=INSTITUTION');
+      setInstitutions(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchGlobalSummary = async () => {
     try {
@@ -60,6 +74,8 @@ export default function PMTrainers({ isReadOnly = false }) {
     setNewEmail(item.email);
     setNewSubject(item.subject || '');
     setNewPassword('');
+    setSelectedInstId(item.institution_id || '');
+    setIsOtherInst(false);
     setShowModal(true);
   };
 
@@ -92,7 +108,8 @@ export default function PMTrainers({ isReadOnly = false }) {
           name: newName,
           email: newEmail,
           role: 'TRAINER',
-          subject: newSubject
+          subject: newSubject,
+          institution_id: isOtherInst ? null : selectedInstId
         });
         showToast('Trainer updated successfully');
       } else {
@@ -101,7 +118,8 @@ export default function PMTrainers({ isReadOnly = false }) {
           email: newEmail,
           password: newPassword,
           role: 'TRAINER',
-          subject: newSubject
+          subject: newSubject,
+          institution_id: isOtherInst ? null : selectedInstId // Simplified: if other, handle separately or as null
         });
         showToast('Trainer added successfully');
       }
@@ -203,6 +221,7 @@ export default function PMTrainers({ isReadOnly = false }) {
           setEditMode(false);
           setSelectedItem(null);
           setNewName(''); setNewEmail(''); setNewPassword(''); setNewSubject('');
+          setSelectedInstId(''); setIsOtherInst(false);
           setShowModal(true);
         } } : undefined}
       />
@@ -300,10 +319,43 @@ export default function PMTrainers({ isReadOnly = false }) {
                 <input 
                   type="text" required value={newSubject} onChange={e => setNewSubject(e.target.value)}
                   className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                  placeholder="React Development"
+                  placeholder="e.g. Mathematics"
                   autoComplete="off"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assigned Institution</label>
+                <select 
+                  value={isOtherInst ? 'others' : selectedInstId} 
+                  onChange={e => {
+                    if (e.target.value === 'others') {
+                      setIsOtherInst(true);
+                      setSelectedInstId('');
+                    } else {
+                      setIsOtherInst(false);
+                      setSelectedInstId(e.target.value);
+                    }
+                  }}
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="">Select Institution...</option>
+                  {institutions.map(inst => (
+                    <option key={inst.id} value={inst.id}>{inst.name}</option>
+                  ))}
+                  <option value="others">Others (Manual Entry)</option>
+                </select>
+              </div>
+              {isOtherInst && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1 mt-2">Institution Name</label>
+                  <input 
+                    type="text" value={customInstName} onChange={e => setCustomInstName(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    placeholder="Enter Institution Name..."
+                  />
+                  <p className="text-[10px] text-amber-600 font-medium mt-1 italic">* Note: Creating new institutions from here is restricted to tagging only.</p>
+                </motion.div>
+              )}
               <div className="flex space-x-3 pt-4">
                 <button 
                   type="button" onClick={() => setShowModal(false)}

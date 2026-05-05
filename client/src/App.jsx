@@ -29,6 +29,8 @@ import PMTrainers from './pages/dashboards/pm/PMTrainers';
 import PMStudents from './pages/dashboards/pm/PMStudents';
 import PMManagers from './pages/dashboards/pm/PMManagers';
 import InstitutionBatches from './pages/dashboards/institution/InstitutionBatches';
+import InstitutionTrainers from './pages/dashboards/institution/InstitutionTrainers';
+import InstitutionAttendance from './pages/dashboards/institution/InstitutionAttendance';
 import TrainerSessions from './pages/dashboards/trainer/TrainerSessions';
 import TrainerInvites from './pages/dashboards/trainer/TrainerInvites';
 import TrainerMarks from './pages/dashboards/trainer/TrainerMarks';
@@ -36,6 +38,7 @@ import StudentSessions from './pages/dashboards/student/StudentSessions';
 import StudentAttendance from './pages/dashboards/student/StudentAttendance';
 import DashboardNotifications from './pages/dashboards/shared/DashboardNotifications';
 import MOAnalytics from './pages/dashboards/mo/MOAnalytics';
+import Profile from './pages/dashboards/Profile';
 
 import skillBridge1Img from './assets/skill_bridge1-removebg-preview.png';
 
@@ -152,10 +155,10 @@ const AppRoutes = () => {
         <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><InstitutionBatches /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/institution/trainers" element={
-        <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><PMTrainers /></DashboardLayout></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><InstitutionTrainers /></DashboardLayout></ProtectedRoute>
       } />
-      <Route path="/dashboard/institution/students" element={
-        <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><PMStudents /></DashboardLayout></ProtectedRoute>
+      <Route path="/dashboard/institution/attendance" element={
+        <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><InstitutionAttendance /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/institution/notifications" element={
         <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><DashboardNotifications /></DashboardLayout></ProtectedRoute>
@@ -216,6 +219,11 @@ const AppRoutes = () => {
       } />
       <Route path="/dashboard/admin/notifications" element={
         <ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><DashboardNotifications /></DashboardLayout></ProtectedRoute>
+      } />
+
+      {/* Shared Profile Route */}
+      <Route path="/dashboard/profile" element={
+        <ProtectedRoute><DashboardLayout><Profile /></DashboardLayout></ProtectedRoute>
       } />
     </Routes>
   );

@@ -69,14 +69,15 @@ model BatchStudent {
 }
 
 model Session {
-  id         Int      @id @default(autoincrement())
-  batch_id   Int
-  trainer_id Int
-  title      String
-  date       DateTime
-  start_time String
-  end_time   String
-  created_at DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  batch_id     Int
+  trainer_id   Int
+  title        String
+  date         DateTime
+  start_time   String
+  end_time     String
+  meeting_link String?
+  created_at   DateTime @default(now())
 
   // Relations
   batch      Batch        @relation(fields: [batch_id], references: [id])

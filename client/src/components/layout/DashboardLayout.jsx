@@ -49,10 +49,10 @@ export default function DashboardLayout({ children }) {
       case 'INSTITUTION':
         return [
           ...baseItems,
-          { name: 'Batches Data', path: '/dashboard/institution/batches', icon: BookOpen },
+          { name: 'Batches', path: '/dashboard/institution/batches', icon: BookOpen },
           { name: 'Trainers', path: '/dashboard/institution/trainers', icon: Users },
-          { name: 'Students Data', path: '/dashboard/institution/students', icon: Users },
-          { name: 'Notifications', path: '/dashboard/institution/notifications', icon: Activity }
+          { name: 'Attendance', path: '/dashboard/institution/attendance', icon: Activity },
+          { name: 'Notifications', path: '/dashboard/institution/notifications', icon: Bell }
         ];
       case 'PROGRAMME_MANAGER':
         return [
@@ -215,6 +215,13 @@ export default function DashboardLayout({ children }) {
                     <p className="text-sm text-gray-900">Signed in as</p>
                     <p className="text-sm font-medium text-gray-900 truncate">{user?.email}</p>
                   </div>
+                  <Link 
+                    to="/dashboard/profile"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    onClick={() => setProfileOpen(false)}
+                  >
+                    <User className="h-4 w-4 mr-2" /> Profile
+                  </Link>
                   <button 
                     onClick={handleLogout}
                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"

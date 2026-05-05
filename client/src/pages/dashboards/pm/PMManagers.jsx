@@ -25,6 +25,8 @@ export default function PMManagers({ isReadOnly = false }) {
   const [toast, setToast] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [isOtherInst, setIsOtherInst] = useState(false);
+  const [customInstName, setCustomInstName] = useState('');
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -72,6 +74,7 @@ export default function PMManagers({ isReadOnly = false }) {
     setNewEmail(item.email);
     setSelectedInstId(item.institution_id || '');
     setNewPassword('');
+    setIsOtherInst(false);
     setShowModal(true);
   };
 
@@ -100,7 +103,7 @@ export default function PMManagers({ isReadOnly = false }) {
           name: newName,
           email: newEmail,
           role: 'MONITORING_OFFICER',
-          institution_id: selectedInstId
+          institution_id: isOtherInst ? null : selectedInstId
         });
         showToast('Officer updated successfully');
       } else {
@@ -109,9 +112,9 @@ export default function PMManagers({ isReadOnly = false }) {
           email: newEmail,
           password: newPassword,
           role: 'MONITORING_OFFICER',
-          institution_id: selectedInstId
+          institution_id: isOtherInst ? null : selectedInstId
         });
-        showToast('Officer provisioned successfully');
+        showToast('Officer added successfully');
       }
       fetchOfficers();
       setShowModal(false);
@@ -205,7 +208,8 @@ export default function PMManagers({ isReadOnly = false }) {
         actionButton={!isReadOnly ? { label: 'Provision Officer', onClick: () => {
           setEditMode(false);
           setSelectedItem(null);
-          setNewName(''); setNewEmail(''); setNewPassword(''); setSelectedInstId('');
+          setNewName(''); setNewEmail(''); setNewPassword('');
+          setSelectedInstId(''); setIsOtherInst(false);
           setShowModal(true);
         } } : undefined}
       />
@@ -285,7 +289,7 @@ export default function PMManagers({ isReadOnly = false }) {
       {/* Provision Officer Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-md overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-gray-800">{editMode ? 'Edit Officer' : 'Provision Monitoring Officer'}</h3>
               <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
@@ -321,25 +325,44 @@ export default function PMManagers({ isReadOnly = false }) {
                 </div>
               )}
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Assigned Institution</label>
-                <div className="space-y-2">
-                  <input 
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Institution</label>
+                <input 
                     type="text" value={instSearch} onChange={e => setInstSearch(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500"
+                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 mb-2"
                     placeholder="Search institution..."
                     autoComplete="off"
                   />
-                  <select 
-                    required value={selectedInstId} onChange={e => setSelectedInstId(e.target.value)}
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">Select an institution</option>
-                    {filteredInstitutions.map(inst => (
-                      <option key={inst.id} value={inst.id}>{inst.name}</option>
-                    ))}
-                  </select>
-                </div>
+                <select 
+                  required 
+                  value={isOtherInst ? 'others' : selectedInstId} 
+                  onChange={e => {
+                    if (e.target.value === 'others') {
+                      setIsOtherInst(true);
+                      setSelectedInstId('');
+                    } else {
+                      setIsOtherInst(false);
+                      setSelectedInstId(e.target.value);
+                    }
+                  }} 
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="">Select Institution...</option>
+                  {filteredInstitutions.map(inst => (
+                    <option key={inst.id} value={inst.id}>{inst.name}</option>
+                  ))}
+                  <option value="others">Others (Manual Entry)</option>
+                </select>
               </div>
+              {isOtherInst && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1 mt-2">Institution Name</label>
+                  <input 
+                    type="text" value={customInstName} onChange={e => setCustomInstName(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    placeholder="Enter Institution Name..."
+                  />
+                </motion.div>
+              )}
               <div className="flex space-x-3 pt-4">
                 <button 
                   type="button" onClick={() => setShowModal(false)}
