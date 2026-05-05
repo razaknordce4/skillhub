@@ -1,0 +1,101 @@
+When a teammate pulls your repo, they won’t have everything ready automatically (because of .gitignore). So you must guide them.
+
+Let’s make it super clear 👇
+
+👨‍💻 What your teammate will get after git clone
+
+They will get:
+
+✅ Source code (client + server)
+✅ docker-compose.yml
+✅ package.json files
+❌ NO .env files
+❌ NO node_modules
+❌ NO build files
+
+🚨 What your teammate MUST do (step-by-step)
+🧱 1. Install dependencies
+Backend:
+cd server
+npm install
+Frontend:
+cd client
+npm install
+🔐 2. Create .env files (VERY IMPORTANT)
+
+Since .env is ignored, they must create it manually.
+
+📍 Backend .env
+server/.env
+PORT=5000
+DB_HOST=postgres
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=mydb
+REDIS_URL=redis://redis:6379
+📍 Frontend .env
+client/.env
+VITE_API_URL=http://localhost:5000
+💡 BEST PRACTICE (what YOU should do)
+
+👉 Provide a template:
+
+Create this in repo:
+.env.example
+
+Then teammate just copies:
+
+cp .env.example .env
+🐳 3. Run the project
+✅ Recommended (Docker way)
+docker-compose up --build
+
+👉 This will:
+
+Start frontend
+Start backend
+Start PostgreSQL
+Start Redis
+❌ OR manual way (not recommended for team)
+Start Postgres locally
+Start Redis locally
+Then run:
+npm start
+npm run dev
+🌍 4. Open project
+Frontend → http://localhost:5173
+Backend → http://localhost:5000
+📄 What YOU should add in README.md (IMPORTANT)
+
+Add this so your teammate doesn’t struggle:
+
+🚀 Setup Instructions
+git clone <repo>
+cd project
+1. Create env files
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+2. Run project
+docker-compose up --build
+🔥 Common Problems (your teammate may face)
+❌ "Cannot connect to DB"
+
+👉 .env not created
+
+❌ "API not working"
+
+👉 Wrong VITE_API_URL
+
+❌ "Port already in use"
+
+👉 Stop old processes or change port
+
+🎯 Final Flow
+
+👉 Your teammate should:
+
+Clone repo
+Install dependencies
+Create .env files
+Run Docker
+Open app

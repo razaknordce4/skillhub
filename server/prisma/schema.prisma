@@ -1,0 +1,118 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+
+
+model User {
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
+  password       String
+  name           String
+  role           String    @default("STUDENT")
+  institution_id Int?
+  created_at     DateTime  @default(now())
+
+  // Relations
+  trainerBatches     BatchTrainer[]
+  studentBatches     BatchStudent[]
+  trainerSessions    Session[]
+  studentAttendances Attendance[]
+  studentMarks       Mark[]
+  notifications      Notification[]
+}
+
+model Batch {
+  id             Int       @id @default(autoincrement())
+  name           String
+  institution_id Int
+  created_at     DateTime  @default(now())
+
+  // Relations
+  trainers BatchTrainer[]
+  students BatchStudent[]
+  sessions Session[]
+  marks    Mark[]
+}
+
+model BatchTrainer {
+  batch_id   Int
+  trainer_id Int
+
+  batch   Batch @relation(fields: [batch_id], references: [id])
+  trainer User  @relation(fields: [trainer_id], references: [id])
+
+  @@id([batch_id, trainer_id])
+}
+
+model BatchStudent {
+  batch_id   Int
+  student_id Int
+
+  batch   Batch @relation(fields: [batch_id], references: [id])
+  student User  @relation(fields: [student_id], references: [id])
+
+  @@id([batch_id, student_id])
+}
+
+model Session {
+  id         Int      @id @default(autoincrement())
+  batch_id   Int
+  trainer_id Int
+  title      String
+  date       DateTime
+  start_time String
+  end_time   String
+  created_at DateTime @default(now())
+
+  // Relations
+  batch      Batch        @relation(fields: [batch_id], references: [id])
+  trainer    User         @relation(fields: [trainer_id], references: [id])
+  attendance Attendance[]
+}
+
+model Attendance {
+  id         Int              @id @default(autoincrement())
+  session_id Int
+  student_id Int
+  status     String
+  marked_at  DateTime         @default(now())
+
+  // Relations
+  session Session @relation(fields: [session_id], references: [id])
+  student User    @relation(fields: [student_id], references: [id])
+
+  @@unique([session_id, student_id])
+}
+
+model Mark {
+  id         Int      @id @default(autoincrement())
+  student_id Int
+  batch_id   Int
+  exam_title String
+  score      Int
+  status     String   @default("GRADED")
+  created_at DateTime @default(now())
+
+  student User  @relation(fields: [student_id], references: [id])
+  batch   Batch @relation(fields: [batch_id], references: [id])
+}
+
+model Notification {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  title      String
+  message    String
+  status     String   @default("UNREAD")
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+}
