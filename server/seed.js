@@ -12,37 +12,38 @@ async function main() {
   const pm = await prisma.user.upsert({
     where: { email: 'pm@example.com' },
     update: {},
-    create: { email: 'pm@example.com', password, name: 'Programme Manager', role: 'PROGRAMME_MANAGER' }
+    create: { email: 'pm@example.com', password, name: 'Programme Manager', role: 'PROGRAMME_MANAGER', displayId: 'PMSB-001' }
   });
 
   const institution = await prisma.user.upsert({
     where: { email: 'inst@example.com' },
     update: {},
-    create: { email: 'inst@example.com', password, name: 'ABC University', role: 'INSTITUTION' }
+    create: { email: 'inst@example.com', password, name: 'ABC University', role: 'INSTITUTION', displayId: 'INSB-001' }
   });
 
   const trainer = await prisma.user.upsert({
     where: { email: 'trainer@example.com' },
     update: {},
-    create: { email: 'trainer@example.com', password, name: 'John Trainer', role: 'TRAINER', institution_id: institution.id }
+    create: { email: 'trainer@example.com', password, name: 'John Trainer', role: 'TRAINER', institution_id: institution.id, displayId: 'TRSB-001' }
   });
 
   const student = await prisma.user.upsert({
     where: { email: 'student@example.com' },
     update: {},
-    create: { email: 'student@example.com', password, name: 'Alice Student', role: 'STUDENT' }
+    create: { email: 'student@example.com', password, name: 'Alice Student', role: 'STUDENT', displayId: 'STSB-001' }
   });
 
   const mo = await prisma.user.upsert({
     where: { email: 'mo@example.com' },
     update: {},
-    create: { email: 'mo@example.com', password, name: 'Monitoring Officer', role: 'MONITORING_OFFICER', institution_id: institution.id }
+    create: { email: 'mo@example.com', password, name: 'Monitoring Officer', role: 'MONITORING_OFFICER', institution_id: institution.id, displayId: 'MOSB-001' }
   });
 
   // 2. Create Batch
   const batch = await prisma.batch.create({
     data: {
       name: 'Batch Oct 2024',
+      displayId: 'BTSB-001',
       institution_id: institution.id,
       trainers: { create: { trainer_id: trainer.id } },
       students: { create: { student_id: student.id } }

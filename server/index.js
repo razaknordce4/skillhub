@@ -1,3 +1,4 @@
+// Trigger restart
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
@@ -8,6 +9,31 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "skillbridge_super_secret_key_123";
+
+// --- ID Generation Helper ---
+const generateDisplayId = async (type, role) => {
+  const prefixMap = {
+    'STUDENT': 'STSB-',
+    'TRAINER': 'TRSB-',
+    'INSTITUTION': 'INSB-',
+    'MONITORING_OFFICER': 'MOSB-',
+    'PROGRAMME_MANAGER': 'PMSB-',
+    'BATCH': 'BTSB-',
+    'ADMIN': 'ADSB-'
+  };
+
+  const prefix = type === 'BATCH' ? 'BTSB-' : (prefixMap[role] || 'USSB-');
+  
+  let count;
+  if (type === 'BATCH') {
+    count = await prisma.batch.count();
+  } else {
+    count = await prisma.user.count({ where: { role } });
+  }
+
+  const nextNumber = (count + 1).toString().padStart(3, '0');
+  return `${prefix}${nextNumber}`;
+};
 
 app.use(cors());
 app.use(express.json());
@@ -45,12 +71,14 @@ app.post("/seed", async (req, res) => {
       const existing = await prisma.user.findUnique({ where: { email } });
       if (!existing) {
         const password = await bcrypt.hash("password123", 10);
+        const displayId = await generateDisplayId('USER', role);
         const user = await prisma.user.create({
           data: {
             email,
             password,
             name: `${role} User`,
             role,
+            displayId,
             institution_id: role === "INSTITUTION" || role === "TRAINER" ? 1 : null
           }
         });
@@ -73,6 +101,7 @@ app.post("/auth/signup", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const userRole = role || "STUDENT";
+    const displayId = await generateDisplayId('USER', userRole);
     
     const user = await prisma.user.create({
       data: {
@@ -80,12 +109,13 @@ app.post("/auth/signup", async (req, res) => {
         email,
         password: hashedPassword,
         role: userRole,
+        displayId,
         institution_id: userRole === "INSTITUTION" || userRole === "TRAINER" ? 1 : null // Default mock institution for prototype
       }
     });
 
-    const token = jwt.sign({ id: user.id, role: user.role, email: user.email, institution_id: user.institution_id }, JWT_SECRET, { expiresIn: "7d" });
-    res.status(201).json({ token, user: { id: user.id, name: user.name, role: user.role, institution_id: user.institution_id } });
+    const token = jwt.sign({ id: user.id, role: user.role, email: user.email, institution_id: user.institution_id, displayId: user.displayId }, JWT_SECRET, { expiresIn: "7d" });
+    res.status(201).json({ token, user: { id: user.id, name: user.name, role: user.role, institution_id: user.institution_id, displayId: user.displayId } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -101,17 +131,62 @@ app.post("/auth/login", async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user.id, role: user.role, email: user.email, institution_id: user.institution_id }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { id: user.id, name: user.name, role: user.role, institution_id: user.institution_id } });
+    const token = jwt.sign({ id: user.id, role: user.role, email: user.email, institution_id: user.institution_id, displayId: user.displayId }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ token, user: { id: user.id, name: user.name, role: user.role, institution_id: user.institution_id, displayId: user.displayId } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // --- User Management (Programme Manager, Admin & Institution) ---
+app.put("/users/:id", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN", "INSTITUTION"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, role, subject, institution_id } = req.body;
+    
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (role) updateData.role = role;
+    if (subject !== undefined) updateData.subject = subject;
+    if (institution_id !== undefined) updateData.institution_id = institution_id ? parseInt(institution_id) : null;
+
+    const user = await prisma.user.update({
+      where: { id: parseInt(id) },
+      data: updateData
+    });
+    res.json({ message: "User updated successfully", user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/users/:id", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN", "INSTITUTION"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = parseInt(id);
+
+    // Delete related records first to avoid foreign key constraint errors
+    await prisma.$transaction([
+      prisma.notification.deleteMany({ where: { user_id: userId } }),
+      prisma.mark.deleteMany({ where: { student_id: userId } }),
+      prisma.attendance.deleteMany({ where: { student_id: userId } }),
+      prisma.batchStudent.deleteMany({ where: { student_id: userId } }),
+      prisma.batchTrainer.deleteMany({ where: { trainer_id: userId } }),
+      // Note: Session deletion is tricky because it has attendance records. 
+      // If we need to delete trainers with sessions, we'd need to delete session attendance first.
+      prisma.user.delete({ where: { id: userId } })
+    ]);
+
+    res.json({ message: "User deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/users", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN", "INSTITUTION"), async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, subject, institution_id } = req.body;
 
     if (req.user.role === "INSTITUTION" && role !== "TRAINER" && role !== "MONITORING_OFFICER") {
       return res.status(403).json({ message: "Institutions can only create Trainers and Monitoring Officers" });
@@ -121,12 +196,13 @@ app.post("/users", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN"
     if (existingUser) return res.status(400).json({ message: "User with this email already exists" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const displayId = await generateDisplayId('USER', role);
     
     let instId = null;
     if (req.user.role === "INSTITUTION") {
       instId = req.user.institution_id; // Assign to their own institution
-    } else if (role === "INSTITUTION" || role === "TRAINER") {
-      instId = 1; // Default mock institution for PM/Admin creating them
+    } else {
+      instId = institution_id ? parseInt(institution_id) : (role === "INSTITUTION" || role === "TRAINER" || role === "STUDENT" ? 1 : null);
     }
 
     const user = await prisma.user.create({
@@ -135,10 +211,12 @@ app.post("/users", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN"
         email,
         password: hashedPassword,
         role: role,
-        institution_id: instId
+        displayId,
+        institution_id: instId,
+        subject: subject || null
       }
     });
-    res.status(201).json({ message: "User created successfully", user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    res.status(201).json({ message: "User created successfully", user: { id: user.id, name: user.name, email: user.email, role: user.role, displayId: user.displayId } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -152,13 +230,25 @@ app.get("/users", authenticateToken, async (req, res) => {
     
     const users = await prisma.user.findMany({
       where,
-      select: { id: true, name: true, email: true, role: true, institution_id: true, created_at: true }
+      include: {
+        institution: {
+          select: { name: true }
+        }
+      }
     });
-    res.json(users);
+
+    // Flatten for easier frontend use
+    const flattenedUsers = users.map(u => ({
+      ...u,
+      institution_name: u.institution?.name || null
+    }));
+
+    res.json(flattenedUsers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // --- Notifications Endpoints ---
 app.get("/notifications", authenticateToken, async (req, res) => {
@@ -232,9 +322,11 @@ app.post("/marks", authenticateToken, authorizeRole("TRAINER", "ADMIN"), async (
 app.post("/batches", authenticateToken, authorizeRole("TRAINER", "INSTITUTION"), async (req, res) => {
   try {
     const { name, institution_id } = req.body;
+    const displayId = await generateDisplayId('BATCH');
     const batch = await prisma.batch.create({
       data: {
         name,
+        displayId,
         institution_id: parseInt(institution_id)
       }
     });
@@ -427,7 +519,7 @@ app.get("/batches/:id/summary", authenticateToken, authorizeRole("INSTITUTION", 
   }
 });
 
-app.get("/institutions/:id/summary", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN", "INSTITUTION"), async (req, res) => {
+app.get("/institutions/:id/summary", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN", "INSTITUTION", "MONITORING_OFFICER"), async (req, res) => {
   try {
     const { id } = req.params;
     const instId = parseInt(id);
@@ -451,7 +543,7 @@ app.get("/institutions/:id/summary", authenticateToken, authorizeRole("PROGRAMME
   }
 });
 
-app.get("/programme/summary", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN"), async (req, res) => {
+app.get("/programme/summary", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER"), async (req, res) => {
   try {
     const totalStudents = await prisma.user.count({ where: { role: "STUDENT" } });
     const totalTrainers = await prisma.user.count({ where: { role: "TRAINER" } });
@@ -501,7 +593,7 @@ app.get("/users/me", authenticateToken, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, name: true, email: true, role: true, institution_id: true }
+      select: { id: true, name: true, email: true, role: true, institution_id: true, displayId: true }
     });
     res.json(user);
   } catch (err) {

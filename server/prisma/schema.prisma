@@ -19,6 +19,10 @@ model User {
   name           String
   role           String    @default("STUDENT")
   institution_id Int?
+  institution    User?     @relation("InstitutionToUsers", fields: [institution_id], references: [id])
+  members        User[]    @relation("InstitutionToUsers")
+  displayId      String?   @unique
+  subject        String?
   created_at     DateTime  @default(now())
 
   // Relations
@@ -34,6 +38,7 @@ model Batch {
   id             Int       @id @default(autoincrement())
   name           String
   institution_id Int
+  displayId      String?   @unique
   created_at     DateTime  @default(now())
 
   // Relations

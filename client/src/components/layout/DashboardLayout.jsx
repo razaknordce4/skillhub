@@ -60,18 +60,25 @@ export default function DashboardLayout({ children }) {
           { name: 'Institutions', path: '/dashboard/programme-manager/institutions', icon: BookOpen },
           { name: 'Trainers', path: '/dashboard/programme-manager/trainers', icon: Users },
           { name: 'Students', path: '/dashboard/programme-manager/students', icon: Users },
-          { name: 'Managers', path: '/dashboard/programme-manager/managers', icon: Users },
+          { name: 'Monitoring Officers', path: '/dashboard/programme-manager/managers', icon: Users },
           { name: 'Notifications', path: '/dashboard/programme-manager/notifications', icon: Activity }
         ];
       case 'MONITORING_OFFICER':
         return [
           ...baseItems,
-          { name: 'Branch Analytics', path: '/dashboard/monitoring-officer/data', icon: Activity },
           { name: 'Institutions', path: '/dashboard/monitoring-officer/institutions', icon: BookOpen },
           { name: 'Trainers', path: '/dashboard/monitoring-officer/trainers', icon: Users },
           { name: 'Students', path: '/dashboard/monitoring-officer/students', icon: Users },
-          { name: 'Managers', path: '/dashboard/monitoring-officer/managers', icon: Users },
           { name: 'Notifications', path: '/dashboard/monitoring-officer/notifications', icon: Activity }
+        ];
+      case 'ADMIN':
+        return [
+          ...baseItems,
+          { name: 'Institutions', path: '/dashboard/admin/institutions', icon: BookOpen },
+          { name: 'Trainers', path: '/dashboard/admin/trainers', icon: Users },
+          { name: 'Students', path: '/dashboard/admin/students', icon: Users },
+          { name: 'Officers', path: '/dashboard/admin/managers', icon: Users },
+          { name: 'Notifications', path: '/dashboard/admin/notifications', icon: Activity }
         ];
       default:
         return baseItems;

@@ -185,9 +185,6 @@ const AppRoutes = () => {
       <Route path="/dashboard/monitoring-officer" element={
         <ProtectedRoute allowedRoles={['MONITORING_OFFICER']}><DashboardLayout><MonitoringOfficerDashboard /></DashboardLayout></ProtectedRoute>
       } />
-      <Route path="/dashboard/monitoring-officer/data" element={
-        <ProtectedRoute allowedRoles={['MONITORING_OFFICER']}><DashboardLayout><MOAnalytics /></DashboardLayout></ProtectedRoute>
-      } />
       <Route path="/dashboard/monitoring-officer/notifications" element={
         <ProtectedRoute allowedRoles={['MONITORING_OFFICER']}><DashboardLayout><DashboardNotifications /></DashboardLayout></ProtectedRoute>
       } />
@@ -200,13 +197,25 @@ const AppRoutes = () => {
       <Route path="/dashboard/monitoring-officer/students" element={
         <ProtectedRoute allowedRoles={['MONITORING_OFFICER']}><DashboardLayout><PMStudents isReadOnly={true} /></DashboardLayout></ProtectedRoute>
       } />
-      <Route path="/dashboard/monitoring-officer/managers" element={
-        <ProtectedRoute allowedRoles={['MONITORING_OFFICER']}><DashboardLayout><PMManagers isReadOnly={true} /></DashboardLayout></ProtectedRoute>
-      } />
 
       {/* Admin */}
       <Route path="/dashboard/admin" element={
         <ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><AdminDashboard /></DashboardLayout></ProtectedRoute>
+      } />
+      <Route path="/dashboard/admin/institutions" element={
+        <ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><PMInstitutions /></DashboardLayout></ProtectedRoute>
+      } />
+      <Route path="/dashboard/admin/trainers" element={
+        <ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><PMTrainers /></DashboardLayout></ProtectedRoute>
+      } />
+      <Route path="/dashboard/admin/students" element={
+        <ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><PMStudents /></DashboardLayout></ProtectedRoute>
+      } />
+      <Route path="/dashboard/admin/managers" element={
+        <ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><PMManagers /></DashboardLayout></ProtectedRoute>
+      } />
+      <Route path="/dashboard/admin/notifications" element={
+        <ProtectedRoute allowedRoles={['ADMIN']}><DashboardLayout><DashboardNotifications /></DashboardLayout></ProtectedRoute>
       } />
     </Routes>
   );

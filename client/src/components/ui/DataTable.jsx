@@ -10,7 +10,8 @@ export default function DataTable({
   actionButton, 
   columns = [], 
   data = [], 
-  onRowAction 
+  onRowAction,
+  onAnalyticsClick
 }) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -44,15 +45,34 @@ export default function DataTable({
             <div key={idx} className="flex flex-col">
               <span className="text-[10px] text-cyan-600 font-medium ml-1">{filter.label}</span>
               <div className="relative">
-                <select className="appearance-none bg-white border border-gray-300 text-gray-700 py-1.5 pl-3 pr-8 rounded focus:outline-none focus:border-blue-500 text-sm w-32">
-                  {filter.options.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
-                </select>
-                <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2 top-2 pointer-events-none" />
+                {filter.type === 'text' ? (
+                  <input 
+                    type="text"
+                    value={filter.value}
+                    onChange={(e) => filter.onChange && filter.onChange(e.target.value)}
+                    placeholder={filter.placeholder || ''}
+                    className="bg-white border border-gray-300 text-gray-700 py-1.5 px-3 rounded focus:outline-none focus:border-blue-500 text-sm w-32"
+                  />
+                ) : (
+                  <>
+                    <select 
+                      value={filter.value}
+                      onChange={(e) => filter.onChange && filter.onChange(e.target.value)}
+                      className="appearance-none bg-white border border-gray-300 text-gray-700 py-1.5 pl-3 pr-8 rounded focus:outline-none focus:border-blue-500 text-sm w-32"
+                    >
+                      {filter.options.map((opt, i) => <option key={i} value={opt}>{opt}</option>)}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-gray-400 absolute right-2 top-2 pointer-events-none" />
+                  </>
+                )}
               </div>
             </div>
           ))}
           
-          <button className="text-sm font-medium text-gray-800 hover:text-blue-600 ml-4 flex items-center">
+          <button 
+            onClick={() => onAnalyticsClick && onAnalyticsClick()}
+            className="text-sm font-medium text-gray-800 hover:text-blue-600 ml-4 flex items-center"
+          >
             Analytics <ChevronDown className="w-4 h-4 ml-1 transform -rotate-90" />
           </button>
         </div>

@@ -268,7 +268,7 @@ export default function InstitutionDashboard() {
                 <tbody className="divide-y divide-gray-100 text-gray-700">
                   {students.map(student => (
                     <tr key={student.id}>
-                      <td className="px-4 py-3 text-blue-500 cursor-pointer hover:underline">{student.name}</td>
+                      <td className="px-4 py-3 text-blue-500 cursor-pointer hover:underline">{student.name} {student.displayId && `(${student.displayId})`}</td>
                       <td className="px-4 py-3 flex items-center"><span className="text-gray-400 mr-2">👤</span> {student.email}</td>
                       <td className="px-4 py-3">Grade 11</td>
                       <td className="px-4 py-3 text-right">85.00</td>
@@ -338,7 +338,7 @@ export default function InstitutionDashboard() {
                    ) : (
                      <ul className="space-y-1">
                        {batches.map(b => (
-                         <li key={b.id} className="text-sm px-2 py-1 bg-white border border-gray-100 rounded text-gray-700">{b.name}</li>
+                         <li key={b.id} className="text-sm px-2 py-1 bg-white border border-gray-100 rounded text-gray-700">{b.name} <span className="text-xs text-gray-400">({b.displayId})</span></li>
                        ))}
                      </ul>
                    )}

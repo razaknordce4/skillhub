@@ -236,7 +236,7 @@ export default function TrainerDashboard() {
                    </div>
                    <div>
                      <p className="text-sm font-bold text-[#1e293b]">{batch.name}</p>
-                     <p className="text-xs text-gray-400">ID: #{batch.id}</p>
+                     <p className="text-xs text-gray-400">ID: {batch.displayId || `#${batch.id}`}</p>
                    </div>
                  </div>
                  <div className="text-right">

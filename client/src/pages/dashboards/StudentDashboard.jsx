@@ -225,7 +225,7 @@ export default function StudentDashboard() {
           </div>
           
           <h4 className="font-bold text-gray-900 text-lg">{user?.name || 'Student Name'}</h4>
-          <p className="text-xs text-gray-500 mb-6">SkillBridge Student</p>
+          <p className="text-xs text-gray-500 mb-6">SkillBridge Student {user?.displayId && `• ${user.displayId}`}</p>
           
           {/* Mini Calendar */}
           <div className="w-full bg-gray-50 rounded-xl p-3 border border-gray-100 mb-4">
