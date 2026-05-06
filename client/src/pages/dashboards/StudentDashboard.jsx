@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   BookOpen, Trophy, Award, Flame, Calendar, Users, Clock,
   MoreHorizontal, ChevronDown, ChevronLeft, ChevronRight,
   Edit3, Plus, CheckCircle, User, TrendingUp, Activity,
@@ -18,6 +18,8 @@ export default function StudentDashboard() {
   const [todos, setTodos] = useState([]);
   const [showAddTodo, setShowAddTodo] = useState(false);
   const [newTodo, setNewTodo] = useState({ title: '', description: '', due_date: '', auto_delete: false });
+  const [goal, setGoal] = useState('');
+  const [goalDate, setGoalDate] = useState('');
   const [joiningId, setJoiningId] = useState(null);
 
   // --- Session status helpers ---
@@ -112,8 +114,8 @@ export default function StudentDashboard() {
         ...todo,
         completed: !todo.completed
       });
-      
-      setTodos(todos.map(t => 
+
+      setTodos(todos.map(t =>
         t.id === id ? res.data : t
       ));
     } catch (err) {
@@ -129,6 +131,23 @@ export default function StudentDashboard() {
       setShowAddTodo(false);
     } catch (err) {
       console.error('Error adding todo:', err);
+    }
+  };
+
+  const saveGoal = async () => {
+    if (!goal) return;
+    try {
+      const res = await axios.post('/api/todos', {
+        title: `  Goal: ${goal}`,
+        description: 'Personal learning goal set from dashboard',
+        due_date: goalDate,
+        auto_delete: false
+      });
+      setTodos([res.data, ...todos]);
+      setGoal('');
+      setGoalDate('');
+    } catch (err) {
+      console.error('Error saving goal:', err);
     }
   };
 
@@ -151,11 +170,11 @@ export default function StudentDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      
+
       {/* Header */}
       <div className="flex flex-col mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Hello, {user?.name.split(' ')[0] || 'Student'}!</h1>
-        <p className="text-gray-500 mt-1">You have today <span className="font-semibold text-gray-700">{sessions.length} class(es)</span> & <span className="font-semibold text-gray-700">0 to-dos</span></p>
+        <p className="text-gray-500 mt-1">You have today <span className="font-semibold text-gray-700">{sessions.length} class(es)</span> & <span className="font-semibold text-gray-700">{todos.filter(t => !t.completed).length} pending to-do(s)</span></p>
       </div>
 
       {/* Stats Cards */}
@@ -226,7 +245,7 @@ export default function StudentDashboard() {
               View All
             </button>
           </div>
-          
+
           <div className="space-y-4">
             {attendanceStats?.recent_sessions?.length > 0 ? (
               attendanceStats.recent_sessions.map((session) => {
@@ -279,25 +298,33 @@ export default function StudentDashboard() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Your Goal</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
                   placeholder="e.g., Complete Python course"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Target Date</label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
+                  value={goalDate}
+                  onChange={(e) => setGoalDate(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
-              <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+              <button
+                onClick={saveGoal}
+                disabled={!goal}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Save Goal
               </button>
             </div>
           </div>
-          
+
           <div className="mt-6 pt-4 border-t border-gray-200">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-500">Current Progress</span>
@@ -313,20 +340,20 @@ export default function StudentDashboard() {
         {/* Attendance Overview */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h3 className="font-bold text-gray-900 text-lg mb-6">Attendance Overview</h3>
-          
+
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Attendance Rate</span>
               <span className="text-sm font-bold text-gray-900">{attendanceStats?.attendance_rate || 0}%</span>
             </div>
-            
+
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
+              <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${attendanceStats?.attendance_rate || 0}%` }}
               ></div>
             </div>
-            
+
             <div className="pt-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -335,7 +362,7 @@ export default function StudentDashboard() {
                 </div>
                 <span className="text-sm font-medium text-gray-900">{attendanceStats?.attended_sessions || 0}</span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <div className="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -353,7 +380,7 @@ export default function StudentDashboard() {
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-gray-900 text-lg">Today's Classes</h3>
           </div>
-          
+
           <div className="flex-1 flex flex-col gap-3">
             {sessions.filter(s => {
               const d = new Date(s.date);
@@ -420,15 +447,15 @@ export default function StudentDashboard() {
         {/* Todo List */}
         <div className="col-span-1 bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col h-full">
           <div className="flex justify-between items-center mb-6">
-             <h3 className="font-bold text-gray-900 text-lg">Todo list</h3>
-             <button 
-               onClick={() => setShowAddTodo(true)}
-               className="flex items-center text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1.5 rounded-lg hover:bg-gray-100"
-             >
-               <Plus className="w-3 h-3 mr-1" /> Add Todo
-             </button>
+            <h3 className="font-bold text-gray-900 text-lg">Todo list</h3>
+            <button
+              onClick={() => setShowAddTodo(true)}
+              className="flex items-center text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1.5 rounded-lg hover:bg-gray-100"
+            >
+              <Plus className="w-3 h-3 mr-1" /> Add Todo
+            </button>
           </div>
-          
+
           {showAddTodo && (
             <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
               <div className="space-y-3">
@@ -436,13 +463,13 @@ export default function StudentDashboard() {
                   type="text"
                   placeholder="Todo title"
                   value={newTodo.title}
-                  onChange={(e) => setNewTodo({...newTodo, title: e.target.value})}
+                  onChange={(e) => setNewTodo({ ...newTodo, title: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <textarea
                   placeholder="Description (optional)"
                   value={newTodo.description}
-                  onChange={(e) => setNewTodo({...newTodo, description: e.target.value})}
+                  onChange={(e) => setNewTodo({ ...newTodo, description: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   rows="2"
                 />
@@ -450,14 +477,14 @@ export default function StudentDashboard() {
                   <input
                     type="datetime-local"
                     value={newTodo.due_date}
-                    onChange={(e) => setNewTodo({...newTodo, due_date: e.target.value})}
+                    onChange={(e) => setNewTodo({ ...newTodo, due_date: e.target.value })}
                     className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <label className="flex items-center text-sm text-gray-600">
                     <input
                       type="checkbox"
                       checked={newTodo.auto_delete}
-                      onChange={(e) => setNewTodo({...newTodo, auto_delete: e.target.checked})}
+                      onChange={(e) => setNewTodo({ ...newTodo, auto_delete: e.target.checked })}
                       className="mr-2"
                     />
                     Auto-delete
@@ -484,7 +511,7 @@ export default function StudentDashboard() {
               </div>
             </div>
           )}
-          
+
           <div className="space-y-3 flex-1 overflow-y-auto pr-2">
             {todos.map(todo => (
               <div key={todo.id} className="flex items-start group p-2 rounded-lg hover:bg-gray-50">
@@ -492,7 +519,7 @@ export default function StudentDashboard() {
                   onClick={() => toggleTodo(todo.id)}
                   className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${todo.completed ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 group-hover:border-emerald-400'}`}
                 >
-                   {todo.completed && <CheckCircle className="w-3 h-3 text-white" />}
+                  {todo.completed && <CheckCircle className="w-3 h-3 text-white" />}
                 </button>
                 <div className="ml-3 flex-1">
                   <p className={`text-sm font-medium ${todo.completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{todo.title}</p>

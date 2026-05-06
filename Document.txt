@@ -90,7 +90,7 @@ docker-compose up --build
 
 👉 Stop old processes or change port
 
-🎯 Final Flow
+  Final Flow
 
 👉 Your teammate should:
 
