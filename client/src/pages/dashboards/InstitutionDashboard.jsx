@@ -3,11 +3,22 @@ import axios from 'axios';
 import { ChevronRight, Filter, Download, Plus, Users, BookOpen, Activity, Calendar, TrendingUp } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { motion } from 'framer-motion';
+import usePolling from '../../hooks/usePolling';
+import { useData } from '../../context/DataContext';
+import { useCallback } from 'react';
 
 export default function InstitutionDashboard() {
   const { user } = useAuth();
-  const [attendanceStats, setAttendanceStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { cache, fetchData, loadingStates } = useData();
+  
+  const attendanceStats = cache['inst_stats'] || null;
+  const loading = loadingStates['inst_stats'] && !attendanceStats;
+
+  const fetchAttendanceStats = useCallback((opts) => {
+    if (user) {
+      return fetchData('inst_stats', '/institution/attendance-stats', opts);
+    }
+  }, [user, fetchData]);
 
   useEffect(() => {
     if (user) {
@@ -15,17 +26,9 @@ export default function InstitutionDashboard() {
     }
   }, [user]);
 
-  const fetchAttendanceStats = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get('/api/institution/attendance-stats');
-      setAttendanceStats(res.data);
-    } catch (err) {
-      console.error('Error fetching attendance stats:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  usePolling(() => {
+    fetchAttendanceStats({ forceRefresh: true, silent: true });
+  }, 30000, !!user);
 
   if (loading) return <div className="flex items-center justify-center h-screen text-gray-500">Loading Dashboard...</div>;
 

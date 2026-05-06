@@ -1,14 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import DataTable from '../../../components/ui/DataTable';
 import Toast from '../../../components/ui/Toast';
 import DeleteConfirmationModal from '../../../components/ui/DeleteConfirmationModal';
 import { AnimatePresence } from 'framer-motion';
 import { Shield, Pencil, Trash2 } from 'lucide-react';
+import { useData } from '../../../context/DataContext';
+import usePolling from '../../../hooks/usePolling';
 
 export default function PMManagers({ isReadOnly = false }) {
-  const [officers, setOfficers] = useState([]);
-  const [globalSummary, setGlobalSummary] = useState(null);
+  const { cache, loadingStates, fetchData, updateCache } = useData();
+  
+  const officers = cache['pm_officers'] || [];
+  const globalSummary = cache['pm_summary'] || null;
+  const institutions = cache['pm_institutions'] || [];
+  
   const [searchId, setSearchId] = useState('');
   const [searchName, setSearchName] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
@@ -31,41 +37,25 @@ export default function PMManagers({ isReadOnly = false }) {
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
   };
-  const [institutions, setInstitutions] = useState([]);
   const [instSearch, setInstSearch] = useState('');
 
   useEffect(() => {
-    fetchOfficers();
     fetchInstitutions();
     fetchGlobalSummary();
+    fetchOfficers();
   }, []);
 
-  const fetchInstitutions = async () => {
-    try {
-      const res = await axios.get('/users?role=INSTITUTION');
-      setInstitutions(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const refreshData = useCallback(() => {
+    fetchInstitutions({ forceRefresh: true, silent: true });
+    fetchGlobalSummary({ forceRefresh: true, silent: true });
+    fetchOfficers({ forceRefresh: true, silent: true });
+  }, []);
 
-  const fetchGlobalSummary = async () => {
-    try {
-      const res = await axios.get('/programme/summary');
-      setGlobalSummary(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  usePolling(refreshData, 30000); // Poll every 30 seconds silently
 
-  const fetchOfficers = async () => {
-    try {
-      const res = await axios.get('/users?role=MONITORING_OFFICER');
-      setOfficers(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const fetchInstitutions = (opts) => fetchData('pm_institutions', '/users?role=INSTITUTION', opts);
+  const fetchGlobalSummary = (opts) => fetchData('pm_summary', '/programme/summary', opts);
+  const fetchOfficers = (opts) => fetchData('pm_officers', '/users?role=MONITORING_OFFICER', opts);
 
   const handleEditClick = (item) => {
     setEditMode(true);
@@ -204,6 +194,7 @@ export default function PMManagers({ isReadOnly = false }) {
         filters={filters}
         columns={columns}
         data={filteredData}
+        loading={loadingStates['pm_officers']}
         onAnalyticsClick={() => setShowAnalyticsModal(true)}
         actionButton={!isReadOnly ? { label: 'Provision Officer', onClick: () => {
           setEditMode(false);

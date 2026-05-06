@@ -8,6 +8,7 @@ import {
   Edit3, Plus, CheckCircle, User, TrendingUp, Activity,
   ExternalLink, Lock, Video
 } from 'lucide-react';
+import usePolling from '../../hooks/usePolling';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -59,12 +60,6 @@ export default function StudentDashboard() {
   };
   // --- End helpers ---
 
-  useEffect(() => {
-    fetchAttendanceStats();
-    fetchSessions();
-    fetchTodos();
-  }, []);
-
   const fetchTodos = async () => {
     try {
       const res = await axios.get('/api/todos');
@@ -75,6 +70,7 @@ export default function StudentDashboard() {
   };
 
   const fetchAttendanceStats = async () => {
+    if (!attendanceStats) setLoading(true);
     try {
       const res = await axios.get('/api/student/attendance-stats');
       setAttendanceStats(res.data);
@@ -93,6 +89,19 @@ export default function StudentDashboard() {
       console.error('Error fetching sessions:', err);
     }
   };
+
+  useEffect(() => {
+    fetchAttendanceStats();
+    fetchSessions();
+    fetchTodos();
+  }, []);
+
+  // Poll for dashboard updates every 30 seconds
+  usePolling(() => {
+    fetchAttendanceStats();
+    fetchSessions();
+    fetchTodos();
+  }, 30000, !!user);
 
   // Join session — records join, opens meeting link, attendance auto-marked when session ends
   const handleJoin = async (session) => {

@@ -11,7 +11,8 @@ export default function DataTable({
   columns = [], 
   data = [], 
   onRowAction,
-  onAnalyticsClick
+  onAnalyticsClick,
+  loading = false
 }) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -102,27 +103,43 @@ export default function DataTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 text-sm">
-            {data.map((row, rowIdx) => (
-              <tr key={rowIdx} className="hover:bg-gray-50 transition-colors group">
-                <td className="py-5 pl-8 pr-4">
-                  <input type="checkbox" className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" />
-                </td>
-                {columns.map((col, colIdx) => (
-                  <td key={colIdx} className="py-5 px-4 text-gray-800">
-                    {col.render ? col.render(row) : row[col.accessor]}
+            {loading ? (
+              Array.from({ length: 5 }).map((_, idx) => (
+                <tr key={`skeleton-${idx}`} className="animate-pulse">
+                  <td className="py-5 pl-8 pr-4">
+                    <div className="h-4 w-4 bg-gray-200 rounded"></div>
                   </td>
-                ))}
-                <td className="py-5 px-8 text-right">
-                  <button 
-                    onClick={() => onRowAction && onRowAction(row)}
-                    className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <MoreHorizontal className="w-5 h-5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {data.length === 0 && (
+                  {columns.map((_, colIdx) => (
+                    <td key={`skeleton-col-${colIdx}`} className="py-5 px-4">
+                      <div className={`h-4 bg-gray-200 rounded ${colIdx === 0 ? 'w-24' : 'w-full'}`}></div>
+                    </td>
+                  ))}
+                  <td className="py-5 px-8"></td>
+                </tr>
+              ))
+            ) : (
+              data.map((row, rowIdx) => (
+                <tr key={rowIdx} className="hover:bg-gray-50 transition-colors group">
+                  <td className="py-5 pl-8 pr-4">
+                    <input type="checkbox" className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50" />
+                  </td>
+                  {columns.map((col, colIdx) => (
+                    <td key={colIdx} className="py-5 px-4 text-gray-800">
+                      {col.render ? col.render(row) : row[col.accessor]}
+                    </td>
+                  ))}
+                  <td className="py-5 px-8 text-right">
+                    <button 
+                      onClick={() => onRowAction && onRowAction(row)}
+                      className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+            {!loading && data.length === 0 && (
               <tr>
                 <td colSpan={columns.length + 2} className="py-12 text-center text-gray-500">
                   No records found.

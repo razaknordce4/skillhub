@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { MoreHorizontal, Edit2, ArrowRight, ShieldAlert, Activity, TrendingUp, Building, Users, Calendar, BookOpen, Eye } from 'lucide-react';
+import usePolling from '../../hooks/usePolling';
 
 export default function MonitoringOfficerDashboard() {
   const [attendanceStats, setAttendanceStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchAttendanceStats();
-  }, []);
-
   const fetchAttendanceStats = async () => {
-    setLoading(true);
+    // Only show loading spinner on initial load to make updates feel "instant"
+    if (!attendanceStats) setLoading(true);
     try {
       const res = await axios.get('/api/mo/attendance-stats');
       setAttendanceStats(res.data);
@@ -21,6 +19,13 @@ export default function MonitoringOfficerDashboard() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchAttendanceStats();
+  }, []);
+
+  // Poll for dashboard updates every 30 seconds
+  usePolling(fetchAttendanceStats, 30000);
 
   return (
     <div className="bg-[#f5f6fa] min-h-[calc(100vh-4rem)] p-6 rounded-2xl text-gray-800 font-sans -mt-6 mx-[-1.5rem] mb-[-1.5rem] overflow-hidden">

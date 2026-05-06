@@ -1,15 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import DataTable from '../../../components/ui/DataTable';
 import Toast from '../../../components/ui/Toast';
 import DeleteConfirmationModal from '../../../components/ui/DeleteConfirmationModal';
 import { AnimatePresence } from 'framer-motion';
 import { User, Pencil, Trash2 } from 'lucide-react';
+import usePolling from '../../../hooks/usePolling';
+import { useData } from '../../../context/DataContext';
 
 export default function PMStudents({ isReadOnly = false }) {
-  const [students, setStudents] = useState([]);
-  const [institutions, setInstitutions] = useState([]);
-  const [globalSummary, setGlobalSummary] = useState(null);
+  const { cache, loadingStates, fetchData } = useData();
+  
+  const students = cache['pm_students'] || [];
+  const institutions = cache['pm_institutions'] || [];
+  const globalSummary = cache['pm_summary'] || null;
+
   const [searchId, setSearchId] = useState('');
   const [searchName, setSearchName] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
@@ -42,32 +47,17 @@ export default function PMStudents({ isReadOnly = false }) {
     fetchGlobalSummary();
   }, []);
 
-  const fetchGlobalSummary = async () => {
-    try {
-      const res = await axios.get('/programme/summary');
-      setGlobalSummary(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const refreshData = useCallback(() => {
+    fetchStudents({ forceRefresh: true, silent: true });
+    fetchInstitutions({ forceRefresh: true, silent: true });
+    fetchGlobalSummary({ forceRefresh: true, silent: true });
+  }, []);
 
-  const fetchInstitutions = async () => {
-    try {
-      const res = await axios.get('/users?role=INSTITUTION');
-      setInstitutions(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  usePolling(refreshData, 60000);
 
-  const fetchStudents = async () => {
-    try {
-      const res = await axios.get('/users?role=STUDENT');
-      setStudents(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const fetchGlobalSummary = (opts) => fetchData('pm_summary', '/programme/summary', opts);
+  const fetchInstitutions = (opts) => fetchData('pm_institutions', '/users?role=INSTITUTION', opts);
+  const fetchStudents = (opts) => fetchData('pm_students', '/users?role=STUDENT', opts);
 
   const handleEditClick = (item) => {
     setEditMode(true);
@@ -218,6 +208,7 @@ export default function PMStudents({ isReadOnly = false }) {
         filters={filters}
         columns={columns}
         data={filteredData}
+        loading={loadingStates['pm_students']}
         onAnalyticsClick={() => setShowAnalyticsModal(true)}
         actionButton={!isReadOnly ? { label: 'Provision Student', onClick: () => {
           setEditMode(false);

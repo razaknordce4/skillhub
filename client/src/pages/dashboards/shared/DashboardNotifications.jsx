@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, CheckCheck, Clock, Inbox, Trash2, Trash, AlertTriangle } from 'lucide-react';
+import usePolling from '../../../hooks/usePolling';
 
 function ConfirmDialog({ message, onConfirm, onCancel }) {
   return (
@@ -42,6 +43,7 @@ export default function DashboardNotifications() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const fetchNotifications = async () => {
+    if (notifications.length === 0) setLoading(true);
     try {
       const res = await axios.get('/notifications');
       setNotifications(Array.isArray(res.data) ? res.data : []);
@@ -55,6 +57,9 @@ export default function DashboardNotifications() {
   useEffect(() => {
     if (user) fetchNotifications();
   }, [user]);
+
+  // Real-time polling: check for new notifications every 10 seconds
+  usePolling(fetchNotifications, 10000, !!user);
 
   const markRead = async (id) => {
     await axios.put(`/notifications/${id}/read`).catch(() => {});

@@ -233,6 +233,8 @@ const AppRoutes = () => {
   );
 };
 
+import { DataProvider } from './context/DataContext';
+
 function App() {
   const [loading, setLoading] = useState(true);
 
@@ -253,12 +255,14 @@ function App() {
 
   return (
     <AuthProvider>
-      <Router>
-        <AnimatePresence>
-          {loading && <Preloader finishLoading={() => setLoading(false)} />}
-        </AnimatePresence>
-        {!loading && <AppRoutes />}
-      </Router>
+      <DataProvider>
+        <Router>
+          <AnimatePresence>
+            {loading && <Preloader finishLoading={() => setLoading(false)} />}
+          </AnimatePresence>
+          {!loading && <AppRoutes />}
+        </Router>
+      </DataProvider>
     </AuthProvider>
   );
 }

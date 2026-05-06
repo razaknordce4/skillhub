@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { MoreHorizontal, Edit2, ArrowRight, UserPlus, Shield, ShieldAlert, Users, Activity, TrendingUp, Building, Calendar, BookOpen } from 'lucide-react';
+import usePolling from '../../hooks/usePolling';
+import { useData } from '../../context/DataContext';
+import { useCallback } from 'react';
 
 export default function ProgrammeManagerDashboard() {
-  const [attendanceStats, setAttendanceStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { cache, fetchData, loadingStates } = useData();
+  
+  const attendanceStats = cache['pm_stats'] || null;
+  const loading = loadingStates['pm_stats'] && !attendanceStats;
   
   // Create User Form State
   const [name, setName] = useState('');
@@ -13,21 +18,17 @@ export default function ProgrammeManagerDashboard() {
   const [role, setRole] = useState('INSTITUTION');
   const [msg, setMsg] = useState('');
 
+  const fetchAttendanceStats = useCallback((opts) => {
+    return fetchData('pm_stats', '/pm/attendance-stats', opts);
+  }, [fetchData]);
+
   useEffect(() => {
     fetchAttendanceStats();
   }, []);
 
-  const fetchAttendanceStats = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get('/api/pm/attendance-stats');
-      setAttendanceStats(res.data);
-    } catch (err) {
-      console.error('Error fetching attendance stats:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  usePolling(() => {
+    fetchAttendanceStats({ forceRefresh: true, silent: true });
+  }, 30000);
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -36,6 +37,7 @@ export default function ProgrammeManagerDashboard() {
       await axios.post('/api/users', { name, email, password, role });
       setMsg(`Successfully provisioned new ${role}!`);
       setName(''); setEmail(''); setPassword('');
+      fetchAttendanceStats();
     } catch (err) {
       setMsg(err.response?.data?.message || 'Error creating user');
     }

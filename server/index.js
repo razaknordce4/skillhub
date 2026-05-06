@@ -383,16 +383,42 @@ app.delete("/users/:id", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "
     const { id } = req.params;
     const userId = parseInt(id);
 
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
     // Delete related records first to avoid foreign key constraint errors
-    await prisma.$transaction([
-      prisma.notification.deleteMany({ where: { user_id: userId } }),
-      prisma.attendance.deleteMany({ where: { student_id: userId } }),
-      prisma.batchStudent.deleteMany({ where: { student_id: userId } }),
-      prisma.batchTrainer.deleteMany({ where: { trainer_id: userId } }),
-      // Note: Session deletion is tricky because it has attendance records. 
-      // If we need to delete trainers with sessions, we'd need to delete session attendance first.
-      prisma.user.delete({ where: { id: userId } })
-    ]);
+    await prisma.$transaction(async (tx) => {
+      // Common deletions
+      await tx.notification.deleteMany({ where: { user_id: userId } });
+      await tx.todo.deleteMany({ where: { user_id: userId } });
+
+      if (user.role === 'INSTITUTION') {
+        // If institution, delete all its members and batches
+        await tx.batchStudent.deleteMany({ where: { batch: { institution_id: userId } } });
+        await tx.batchTrainer.deleteMany({ where: { batch: { institution_id: userId } } });
+        
+        // Delete all sessions in all batches of this institution
+        const batches = await tx.batch.findMany({ where: { institution_id: userId } });
+        const batchIds = batches.map(b => b.id);
+        
+        await tx.attendance.deleteMany({ where: { session: { batch_id: { in: batchIds } } } });
+        await tx.sessionJoin.deleteMany({ where: { session: { batch_id: { in: batchIds } } } });
+        await tx.session.deleteMany({ where: { batch_id: { in: batchIds } } });
+        await tx.batch.deleteMany({ where: { institution_id: userId } });
+        
+        // Finally delete the users linked to this institution (optional, but requested by logic usually)
+        // Note: Students might belong to other institutions in theory, but here they are likely exclusive.
+        await tx.user.deleteMany({ where: { institution_id: userId } });
+      } else {
+        // If regular user
+        await tx.attendance.deleteMany({ where: { student_id: userId } });
+        await tx.batchStudent.deleteMany({ where: { student_id: userId } });
+        await tx.batchTrainer.deleteMany({ where: { trainer_id: userId } });
+        await tx.sessionJoin.deleteMany({ where: { student_id: userId } });
+      }
+
+      await tx.user.delete({ where: { id: userId } });
+    });
 
     res.json({ message: "User deleted successfully" });
   } catch (err) {
@@ -456,12 +482,12 @@ app.get("/users/:id", authenticateToken, async (req, res) => {
   }
 });
 
-app.put("/users/:id", authenticateToken, async (req, res) => {
+app.put("/users/:id", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN", "INSTITUTION"), async (req, res) => {
   try {
     const { id } = req.params;
-    const { email, password, hasCredentials, tempPassword } = req.body;
+    const { name, email, password, hasCredentials, tempPassword, role, institution_id } = req.body;
     
-    // Verify user exists and is an institution
+    // Verify user exists
     const user = await prisma.user.findUnique({
       where: { id: parseInt(id) }
     });
@@ -469,13 +495,17 @@ app.put("/users/:id", authenticateToken, async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    
-    if (user.role !== 'INSTITUTION') {
-      return res.status(403).json({ message: "Only institutions can update credentials" });
+
+    // Role-based protection: only PM/Admin can update non-institutions
+    if (req.user.role === "INSTITUTION" && user.role !== "INSTITUTION") {
+       return res.status(403).json({ message: "Institutions can only update their own or linked institution credentials" });
     }
     
     const updateData = {};
+    if (name) updateData.name = name;
     if (email) updateData.email = email;
+    if (role) updateData.role = role;
+    if (institution_id !== undefined) updateData.institution_id = institution_id ? parseInt(institution_id) : null;
     if (password) {
       updateData.password = await bcrypt.hash(password, 10);
     }
@@ -551,22 +581,26 @@ app.get("/users", authenticateToken, async (req, res) => {
     let include = {
       institution: {
         select: { name: true }
-      },
-      studentBatches: {
-        include: {
-          batch: {
-            select: { name: true }
-          }
-        }
-      },
-      trainerBatches: {
-        include: {
-          batch: {
-            select: { name: true }
-          }
-        }
       }
     };
+
+    if (role === 'STUDENT') {
+      include.studentBatches = {
+        include: {
+          batch: { select: { name: true } }
+        }
+      };
+    } else if (role === 'TRAINER') {
+      include.trainerBatches = {
+        include: {
+          batch: { select: { name: true } }
+        }
+      };
+    } else if (!role) {
+      // If no role specified, include both for safety or common use cases
+      include.studentBatches = { include: { batch: { select: { name: true } } } };
+      include.trainerBatches = { include: { batch: { select: { name: true } } } };
+    }
       
     // Include trainer subjects if requested or if role is TRAINER
     if (req.query.include === 'subjects' || role === 'TRAINER') {
@@ -1793,8 +1827,13 @@ app.get("/institutions/:id/summary", authenticateToken, authorizeRole("PROGRAMME
     const sessions = await prisma.session.findMany({ where: { batch_id: { in: batchIds } } });
     const sessionIds = sessions.map(s => s.id);
 
-    const attendances = await prisma.attendance.findMany({ where: { session_id: { in: sessionIds } } });
-    const presentCount = attendances.filter(a => a.status === "PRESENT").length;
+    const totalAttendances = await prisma.attendance.count({ where: { session_id: { in: sessionIds } } });
+    const presentCount = await prisma.attendance.count({ 
+      where: { 
+        session_id: { in: sessionIds },
+        status: "PRESENT" 
+      } 
+    });
 
     // Students linked to this institution
     const totalStudents = await prisma.user.count({ 
@@ -1811,7 +1850,7 @@ app.get("/institutions/:id/summary", authenticateToken, authorizeRole("PROGRAMME
       total_batches: batches.length, 
       total_sessions: sessions.length,
       total_students: totalStudents,
-      overall_attendance_rate: attendances.length > 0 ? (presentCount / attendances.length) * 100 : 0
+      overall_attendance_rate: totalAttendances > 0 ? (presentCount / totalAttendances) * 100 : 0
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1825,15 +1864,15 @@ app.get("/programme/summary", authenticateToken, authorizeRole("PROGRAMME_MANAGE
     const totalInstitutions = await prisma.user.count({ where: { role: "INSTITUTION" } });
     const totalSessions = await prisma.session.count();
     
-    const attendances = await prisma.attendance.findMany();
-    const presentCount = attendances.filter(a => a.status === "PRESENT").length;
+    const totalAttendances = await prisma.attendance.count();
+    const presentCount = await prisma.attendance.count({ where: { status: "PRESENT" } });
 
     res.json({
       total_students: totalStudents,
       total_trainers: totalTrainers,
       total_institutions: totalInstitutions,
       total_sessions: totalSessions,
-      overall_attendance_rate: attendances.length > 0 ? (presentCount / attendances.length) * 100 : 0
+      overall_attendance_rate: totalAttendances > 0 ? (presentCount / totalAttendances) * 100 : 0
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2157,21 +2196,40 @@ app.get("/student/attendance-stats", authenticateToken, authorizeRole("STUDENT")
 });
 
 // Trainer attendance statistics
-app.get("/trainer/attendance-stats", authenticateToken, authorizeRole("TRAINER"), async (req, res) => {
+app.get("/trainer/attendance-stats", authenticateToken, authorizeRole("TRAINER", "PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER"), async (req, res) => {
   try {
+    const { trainerId, startDate, endDate } = req.query;
+    
+    // Determine the target trainer ID
+    let targetTrainerId = req.user.id;
+    if (trainerId && ["PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER"].includes(req.user.role)) {
+      targetTrainerId = parseInt(trainerId);
+    }
+
+    const sessionFilter = {};
+    if (startDate || endDate) {
+      sessionFilter.date = {};
+      if (startDate) sessionFilter.date.gte = new Date(startDate);
+      if (endDate) sessionFilter.date.lte = new Date(endDate);
+    }
+
     const trainerBatches = await prisma.batchTrainer.findMany({
-      where: { trainer_id: req.user.id },
+      where: { trainer_id: targetTrainerId },
       include: { batch: true }
     });
 
     const batchIds = trainerBatches.map(tb => tb.batch_id);
     
     const sessions = await prisma.session.findMany({
-      where: { batch_id: { in: batchIds } },
+      where: { 
+        batch_id: { in: batchIds },
+        ...sessionFilter
+      },
       include: {
         batch: true,
         attendance: {
-          include: { student: { select: { name: true } } }
+          where: { status: 'PRESENT' },
+          select: { student_id: true }
         }
       }
     });
@@ -2236,70 +2294,72 @@ app.get("/trainer/attendance-stats", authenticateToken, authorizeRole("TRAINER")
 });
 
 // Institution attendance statistics
-app.get("/institution/attendance-stats", authenticateToken, authorizeRole("INSTITUTION"), async (req, res) => {
+app.get("/institution/attendance-stats", authenticateToken, authorizeRole("INSTITUTION", "PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER"), async (req, res) => {
   try {
+    const { institutionId, startDate, endDate } = req.query;
+    
+    // Determine the target institution ID
+    let targetInstitutionId = req.user.id;
+    if (institutionId && ["PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER"].includes(req.user.role)) {
+      targetInstitutionId = parseInt(institutionId);
+    }
+
+    const sessionFilter = {};
+    if (startDate || endDate) {
+      sessionFilter.date = {};
+      if (startDate) sessionFilter.date.gte = new Date(startDate);
+      if (endDate) sessionFilter.date.lte = new Date(endDate);
+    }
+
     const batches = await prisma.batch.findMany({
-      where: { institution_id: req.user.id },
+      where: { institution_id: targetInstitutionId },
       include: {
         sessions: {
+          where: sessionFilter,
           include: {
-            attendance: {
-              include: { student: true }
-            }
+            attendance: { where: { status: 'PRESENT' } }
           }
         },
-        students: {
-          include: { student: true }
-        },
-        trainers: {
-          include: { trainer: true }
-        }
+        students: { select: { student_id: true } },
+        trainers: { select: { trainer_id: true } }
       }
     });
 
-    let totalSessions = 0;
-    let totalAttendances = 0;
-    let possibleAttendances = 0;
+    let totalSessionsCount = 0;
+    let totalAttendancesCount = 0;
+    let totalPossibleAttendancesCount = 0;
 
-    const batchStats = await Promise.all(batches.map(async (batch) => {
+    const batchStats = batches.map((batch) => {
       const batchSessions = batch.sessions;
       const batchTotalSessions = batchSessions.length;
-      totalSessions += batchTotalSessions;
+      totalSessionsCount += batchTotalSessions;
 
-      let batchTotalAttendances = 0;
-      let batchPossibleAttendances = 0;
+      const batchTotalAttendances = batchSessions.reduce((sum, s) => 
+        sum + s.attendance.filter(a => a.status === 'PRESENT').length, 0
+      );
+      const batchPossibleAttendances = batchTotalSessions * batch.students.length;
 
-      for (const session of batchSessions) {
-        for (const student of batch.students) {
-          batchPossibleAttendances++;
-          possibleAttendances++;
-          if (session.attendance.some(att => att.student_id === student.student_id && att.status === 'PRESENT')) {
-            batchTotalAttendances++;
-            totalAttendances++;
-          }
-        }
-      }
-
-      const attendanceRate = batchPossibleAttendances > 0 ? (batchTotalAttendances / batchPossibleAttendances) * 100 : 0;
+      totalAttendancesCount += batchTotalAttendances;
+      totalPossibleAttendancesCount += batchPossibleAttendances;
 
       return {
         batch_id: batch.id,
         batch_name: batch.name,
         total_sessions: batchTotalSessions,
-        attendance_rate: Math.round(attendanceRate * 10) / 10,
+        attendance_rate: batchPossibleAttendances > 0 ? Math.round((batchTotalAttendances / batchPossibleAttendances) * 1000) / 10 : 0,
         student_count: batch.students.length,
         trainer_count: batch.trainers.length
       };
-    }));
+    });
 
-    const overallAttendanceRate = possibleAttendances > 0 ? (totalAttendances / possibleAttendances) * 100 : 0;
+    const overallAttendanceRate = totalPossibleAttendancesCount > 0 ? (totalAttendancesCount / totalPossibleAttendancesCount) * 100 : 0;
 
-    const totalStudents = await prisma.user.count({ where: { role: "STUDENT", institution_id: req.user.id } });
-    const totalTrainers = await prisma.user.count({ where: { role: "TRAINER", institution_id: req.user.id } });
+    const totalStudents = await prisma.user.count({ where: { role: "STUDENT", institution_id: targetInstitutionId } });
+    const totalTrainers = await prisma.user.count({ where: { role: "TRAINER", institution_id: targetInstitutionId } });
 
     res.json({
       total_batches: batches.length,
-      total_sessions: totalSessions,
+      total_sessions: totalSessionsCount,
       overall_attendance_rate: Math.round(overallAttendanceRate * 10) / 10,
       total_students: totalStudents,
       total_trainers: totalTrainers,
@@ -2311,62 +2371,75 @@ app.get("/institution/attendance-stats", authenticateToken, authorizeRole("INSTI
 });
 
 // Programme Manager attendance statistics
-app.get("/pm/attendance-stats", authenticateToken, authorizeRole("PROGRAMME_MANAGER"), async (req, res) => {
+app.get("/pm/attendance-stats", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER"), async (req, res) => {
   try {
+    const { startDate, endDate } = req.query;
+    
+    const sessionFilter = {};
+    if (startDate || endDate) {
+      sessionFilter.date = {};
+      if (startDate) sessionFilter.date.gte = new Date(startDate);
+      if (endDate) sessionFilter.date.lte = new Date(endDate);
+    }
+
     const institutions = await prisma.user.findMany({
       where: { role: "INSTITUTION" },
       select: { id: true, name: true }
     });
+
+    const [studentCounts, trainerCounts] = await Promise.all([
+      prisma.user.groupBy({
+        by: ['institution_id'],
+        where: { role: 'STUDENT' },
+        _count: true
+      }),
+      prisma.user.groupBy({
+        by: ['institution_id'],
+        where: { role: 'TRAINER' },
+        _count: true
+      })
+    ]);
+
+    const studentCountMap = Object.fromEntries(studentCounts.map(c => [c.institution_id, c._count]));
+    const trainerCountMap = Object.fromEntries(trainerCounts.map(c => [c.institution_id, c._count]));
 
     const institutionStats = await Promise.all(institutions.map(async (institution) => {
       const batches = await prisma.batch.findMany({
         where: { institution_id: institution.id },
         include: {
           sessions: {
+            where: sessionFilter,
             include: {
-              attendance: true
+              attendance: { where: { status: 'PRESENT' } }
             }
           },
           students: {
-            include: { student: { select: { id: true } } }
-          },
-          trainers: {
-            include: { trainer: { select: { id: true } } }
+            select: { student_id: true }
           }
         }
       });
 
-      let totalSessions = 0;
-      let totalAttendances = 0;
-      let possibleAttendances = 0;
+      let totalSessionsCount = 0;
+      let totalAttendancesCount = 0;
+      let totalPossibleAttendancesCount = 0;
 
       for (const batch of batches) {
         const batchSessions = batch.sessions;
-        totalSessions += batchSessions.length;
-
-        for (const session of batchSessions) {
-          for (const student of batch.students) {
-            possibleAttendances++;
-            if (session.attendance.some(att => att.student_id === student.student_id && att.status === 'PRESENT')) {
-              totalAttendances++;
-            }
-          }
-        }
+        totalSessionsCount += batchSessions.length;
+        totalAttendancesCount += batchSessions.reduce((sum, s) => sum + s.attendance.length, 0);
+        totalPossibleAttendancesCount += batchSessions.length * batch.students.length;
       }
 
-      const attendanceRate = possibleAttendances > 0 ? (totalAttendances / possibleAttendances) * 100 : 0;
-
-      const instStudents = await prisma.user.count({ where: { role: "STUDENT", institution_id: institution.id } });
-      const instTrainers = await prisma.user.count({ where: { role: "TRAINER", institution_id: institution.id } });
+      const attendanceRate = totalPossibleAttendancesCount > 0 ? (totalAttendancesCount / totalPossibleAttendancesCount) * 100 : 0;
 
       return {
         institution_id: institution.id,
         institution_name: institution.name,
         total_batches: batches.length,
-        total_sessions: totalSessions,
+        total_sessions: totalSessionsCount,
         attendance_rate: Math.round(attendanceRate * 10) / 10,
-        total_students: instStudents,
-        total_trainers: instTrainers
+        total_students: studentCountMap[institution.id] || 0,
+        total_trainers: trainerCountMap[institution.id] || 0
       };
     }));
 
@@ -2386,6 +2459,59 @@ app.get("/pm/attendance-stats", authenticateToken, authorizeRole("PROGRAMME_MANA
       ...overallStats,
       overall_attendance_rate: Math.round(overallAttendanceRate * 10) / 10,
       institution_stats: institutionStats
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Programme Manager institutions analytics aggregate (for the header summary)
+app.get("/pm/institutions-analytics-aggregate", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER"), async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    const sessionFilter = {};
+    if (startDate || endDate) {
+      sessionFilter.date = {};
+      if (startDate) sessionFilter.date.gte = new Date(startDate);
+      if (endDate) sessionFilter.date.lte = new Date(endDate);
+    }
+
+    const batches = await prisma.batch.findMany({
+      include: {
+        sessions: {
+          where: sessionFilter,
+          include: {
+            attendance: { where: { status: 'PRESENT' } }
+          }
+        },
+        students: { select: { student_id: true } }
+      }
+    });
+
+    let totalSessionsCount = 0;
+    let totalAttendancesCount = 0;
+    let totalPossibleAttendancesCount = 0;
+    let totalStudentsCount = await prisma.user.count({ where: { role: 'STUDENT' } });
+    let totalTrainersCount = await prisma.user.count({ where: { role: 'TRAINER' } });
+    let totalInstitutionsCount = await prisma.user.count({ where: { role: 'INSTITUTION' } });
+
+    for (const batch of batches) {
+      const batchSessions = batch.sessions;
+      totalSessionsCount += batchSessions.length;
+      totalAttendancesCount += batchSessions.reduce((sum, s) => sum + s.attendance.length, 0);
+      totalPossibleAttendancesCount += batchSessions.length * batch.students.length;
+    }
+
+    const overallAttendanceRate = totalPossibleAttendancesCount > 0 ? (totalAttendancesCount / totalPossibleAttendancesCount) * 100 : 0;
+
+    res.json({
+      total_institutions: totalInstitutionsCount,
+      total_batches: batches.length,
+      total_sessions: totalSessionsCount,
+      total_students: totalStudentsCount,
+      total_trainers: totalTrainersCount,
+      overall_attendance_rate: Math.round(overallAttendanceRate * 10) / 10
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

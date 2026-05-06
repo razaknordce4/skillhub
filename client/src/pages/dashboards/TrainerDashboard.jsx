@@ -6,6 +6,7 @@ import {
   Clock, Plus, Link as LinkIcon, ChevronDown, TrendingUp,
   CheckCircle, Activity, User
 } from 'lucide-react';
+import usePolling from '../../hooks/usePolling';
 
 export default function TrainerDashboard() {
   const { user, loading: authLoading } = useAuth();
@@ -21,15 +22,8 @@ export default function TrainerDashboard() {
   const [inviteLink, setInviteLink] = useState('');
   const [meetingLink, setMeetingLink] = useState('');
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchAttendanceStats();
-      fetchBatches();
-      fetchSessions();
-    }
-  }, [authLoading, user]);
-
   const fetchAttendanceStats = async () => {
+    if (!attendanceStats) setLoading(true);
     try {
       const res = await axios.get('/trainer/attendance-stats');
       setAttendanceStats(res.data);
@@ -58,6 +52,23 @@ export default function TrainerDashboard() {
       console.error(err);
     }
   };
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      fetchAttendanceStats();
+      fetchBatches();
+      fetchSessions();
+    }
+  }, [authLoading, user]);
+
+  // Poll for trainer updates every 30 seconds
+  usePolling(() => {
+    if (user) {
+      fetchAttendanceStats();
+      fetchBatches();
+      fetchSessions();
+    }
+  }, 30000, !!user);
 
   const handleCreateSession = async (e) => {
     e.preventDefault();
