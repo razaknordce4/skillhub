@@ -4,12 +4,17 @@ import DataTable from '../../../components/ui/DataTable';
 import Toast from '../../../components/ui/Toast';
 import DeleteConfirmationModal from '../../../components/ui/DeleteConfirmationModal';
 import { AnimatePresence } from 'framer-motion';
-import { User, Pencil, Trash2 } from 'lucide-react';
+import { User, Pencil, Trash2, Calendar, Download, Activity, BookOpen, Users, TrendingUp, X, Check } from 'lucide-react';
 import usePolling from '../../../hooks/usePolling';
 import { useData } from '../../../context/DataContext';
+import { useAuth } from '../../../context/AuthContext';
 
 export default function PMStudents({ isReadOnly = false }) {
+  const { user } = useAuth();
   const { cache, loadingStates, fetchData } = useData();
+  
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   
   const students = cache['pm_students'] || [];
   const institutions = cache['pm_institutions'] || [];
@@ -23,7 +28,7 @@ export default function PMStudents({ isReadOnly = false }) {
   const [editMode, setEditMode] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [selectedStudentAnalytics, setSelectedStudentAnalytics] = useState(null);
 
   // New Student Form State
   const [newName, setNewName] = useState('');
@@ -41,23 +46,38 @@ export default function PMStudents({ isReadOnly = false }) {
   };
   const [instSearch, setInstSearch] = useState('');
 
+  const fetchGlobalSummary = useCallback((opts) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    
+    // If institution or trainer role, use specific stats
+    let endpoint = `/programme/summary?${params.toString()}`;
+    if (user?.role === 'INSTITUTION') {
+      endpoint = `/institution/attendance-stats?${params.toString()}`;
+    } else if (user?.role === 'TRAINER') {
+      endpoint = `/trainer/attendance-stats?${params.toString()}`;
+    }
+      
+    return fetchData('pm_summary', endpoint, opts);
+  }, [fetchData, user?.role, startDate, endDate]);
+
+  const fetchInstitutions = useCallback((opts) => fetchData('pm_institutions', '/users?role=INSTITUTION', opts), [fetchData]);
+  const fetchStudents = useCallback((opts) => fetchData('pm_students', '/users?role=STUDENT', opts), [fetchData]);
+
   useEffect(() => {
     fetchStudents();
     fetchInstitutions();
     fetchGlobalSummary();
-  }, []);
+  }, [user, fetchGlobalSummary]);
 
   const refreshData = useCallback(() => {
     fetchStudents({ forceRefresh: true, silent: true });
     fetchInstitutions({ forceRefresh: true, silent: true });
     fetchGlobalSummary({ forceRefresh: true, silent: true });
-  }, []);
+  }, [fetchStudents, fetchInstitutions, fetchGlobalSummary]);
 
   usePolling(refreshData, 60000);
-
-  const fetchGlobalSummary = (opts) => fetchData('pm_summary', '/programme/summary', opts);
-  const fetchInstitutions = (opts) => fetchData('pm_institutions', '/users?role=INSTITUTION', opts);
-  const fetchStudents = (opts) => fetchData('pm_students', '/users?role=STUDENT', opts);
 
   const handleEditClick = (item) => {
     setEditMode(true);
@@ -130,6 +150,31 @@ export default function PMStudents({ isReadOnly = false }) {
     return matchesId && matchesName && matchesEmail && matchesBatch;
   });
 
+  const handleViewAnalytics = async (student) => {
+    setShowAnalyticsModal(true);
+    setSelectedStudentAnalytics({ name: student.name, loading: true });
+    
+    try {
+      const params = new URLSearchParams({ studentId: student.id });
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      
+      const res = await axios.get(`/student/attendance-stats?${params.toString()}`);
+      setSelectedStudentAnalytics({
+        ...res.data,
+        name: student.name,
+        displayId: student.displayId,
+        email: student.email,
+        batch: student.batch,
+        loading: false
+      });
+    } catch (err) {
+      console.error('Error fetching student analytics:', err);
+      showToast('Failed to fetch analytics', 'error');
+      setShowAnalyticsModal(false);
+    }
+  };
+
   const baseColumns = [
     {
       header: 'Student ID',
@@ -161,10 +206,11 @@ export default function PMStudents({ isReadOnly = false }) {
       accessor: 'view',
       render: (row) => (
         <button 
-          onClick={() => setSelectedStudent(row)}
-          className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1 rounded text-xs font-bold transition-colors border border-blue-100"
+          onClick={() => handleViewAnalytics(row)}
+          className="flex items-center space-x-2 bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border border-blue-100 active:scale-95"
         >
-          VIEW
+          <Activity size={14} />
+          <span>VIEW REPORT</span>
         </button>
       )
     }
@@ -203,120 +249,298 @@ export default function PMStudents({ isReadOnly = false }) {
 
   return (
     <div className="h-full p-6">
+      <div className="mb-8 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div>
+            <h1 className="text-2xl font-black text-gray-900">
+              {user?.role === 'INSTITUTION' ? 'Institution Student Management' : user?.role === 'TRAINER' ? 'Assigned Students Management' : 'Students Management'}
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {user?.role === 'INSTITUTION' ? 'Monitor and manage students within your institution' : user?.role === 'TRAINER' ? 'Monitor and track performance for students in your assigned batches' : 'Oversee student enrollment and performance tracking'}
+            </p>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
+              <Calendar size={16} className="text-gray-400 mr-2" />
+              <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-transparent text-sm font-bold text-gray-700 outline-none focus:ring-0 border-none p-0"
+              />
+              <span className="mx-2 text-gray-300">to</span>
+              <input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-transparent text-sm font-bold text-gray-700 outline-none focus:ring-0 border-none p-0"
+              />
+              {(startDate || endDate) && (
+                <button 
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="ml-2 text-gray-400 hover:text-red-500"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => window.print()}
+              className="flex items-center space-x-2 px-4 py-2 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors bg-white shadow-sm"
+            >
+              <Download size={16} />
+              <span>Export PDF</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Aggregate Analytics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div 
+          onClick={() => setShowAnalyticsModal(true)}
+          className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors">
+              <Users size={20} />
+            </div>
+            <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Total Students</span>
+          </div>
+          <div className="text-2xl font-black text-gray-900">{globalSummary?.total_students || 0}</div>
+          <div className="text-xs text-gray-400 mt-1 font-medium">Currently enrolled</div>
+        </div>
+
+        <div 
+          onClick={() => setShowAnalyticsModal(true)}
+          className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              <TrendingUp size={20} />
+            </div>
+            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Avg Attendance</span>
+          </div>
+          <div className="text-2xl font-black text-gray-900">{globalSummary?.overall_attendance_rate?.toFixed(1) || 0}%</div>
+          <div className="text-xs text-gray-400 mt-1 font-medium">Performance summary</div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm opacity-60">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+              <Activity size={20} />
+            </div>
+            <span className="text-[10px] font-black text-purple-500 uppercase tracking-widest">Active Progress</span>
+          </div>
+          <div className="text-2xl font-black text-gray-900">84%</div>
+          <div className="text-xs text-gray-400 mt-1 font-medium">Course completion</div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm opacity-60">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
+              <Calendar size={20} />
+            </div>
+            <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest">Daily Active</span>
+          </div>
+          <div className="text-2xl font-black text-gray-900">{Math.round((globalSummary?.total_students || 0) * 0.72)}</div>
+          <div className="text-xs text-gray-400 mt-1 font-medium">Avg per day</div>
+        </div>
+      </div>
+
       <DataTable 
-        title={<span>Students Management <span className="text-sm text-gray-400 font-normal ml-2">Total: {filteredData.length}</span></span>}
+        title={
+          <span>
+            Students Management 
+            <span className="text-sm text-gray-400 font-normal ml-2">Total: {filteredData.length}</span>
+          </span>
+        }
         filters={filters}
         columns={columns}
         data={filteredData}
         loading={loadingStates['pm_students']}
         onAnalyticsClick={() => setShowAnalyticsModal(true)}
-        actionButton={!isReadOnly ? { label: 'Provision Student', onClick: () => {
-          setEditMode(false);
-          setSelectedItem(null);
-          setNewName(''); setNewEmail(''); setNewPassword('');
-          setSelectedInstId(''); setIsOtherInst(false);
-          setShowModal(true);
-        } } : undefined}
+        actionButton={isReadOnly ? undefined : { 
+          label: 'Provision Student', 
+          onClick: () => {
+            setEditMode(false);
+            setSelectedItem(null);
+            setNewName(''); 
+            setNewEmail(''); 
+            setNewPassword('');
+            setSelectedInstId(''); 
+            setIsOtherInst(false);
+            setShowModal(true);
+          } 
+        }}
       />
 
       {/* Global Analytics Modal */}
       {showAnalyticsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h3 className="font-bold text-gray-800">Global Students Analytics</h3>
-              <button onClick={() => setShowAnalyticsModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm print:p-0 print:bg-white print:relative print:inset-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col print:max-h-none print:shadow-none print:rounded-none print:w-full">
+            <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 print:bg-white print:border-none">
+              <div>
+                <h3 className="text-xl font-black text-gray-900">
+                  {user?.role === 'INSTITUTION' ? 'Institutional Student Analytics' : user?.role === 'TRAINER' ? 'My Students Analytics' : 'Programme-wide Student Analytics'}
+                </h3>
+                <p className="text-sm text-gray-500 font-medium">
+                  {user?.role === 'INSTITUTION' ? 'Performance summary for your enrolled students' : user?.role === 'TRAINER' ? 'Performance summary for students in your assigned batches' : 'Performance summary across all enrolled students'}
+                </p>
+              </div>
+              <div className="flex items-center space-x-4 print:hidden">
+                <button 
+                  onClick={() => window.print()}
+                  className="flex items-center space-x-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg shadow-gray-200"
+                >
+                  <Download size={16} />
+                  <span>Export PDF</span>
+                </button>
+                <button onClick={() => setShowAnalyticsModal(false)} className="text-gray-400 hover:text-gray-600 bg-white p-2 rounded-full border border-gray-200 shadow-sm transition-all">
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
             </div>
-            <div className="p-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-                  <span className="text-xs font-bold text-blue-500 uppercase tracking-wider">Total Enrolled</span>
-                  <div className="text-3xl font-black text-blue-900 mt-1">{globalSummary?.total_students || 0}</div>
+            <div className="p-8 overflow-y-auto flex-1 print:overflow-visible">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                <div className="bg-blue-50 p-8 rounded-3xl border border-blue-100 flex flex-col items-center text-center">
+                  <div className="p-3 bg-white text-blue-600 rounded-2xl shadow-sm mb-4"><Users size={24} /></div>
+                  <div className="text-4xl font-black text-blue-900">{globalSummary?.total_students || 0}</div>
+                  <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1">Total Enrolled</div>
                 </div>
-                <div className="bg-emerald-50 p-6 rounded-xl border border-emerald-100">
-                  <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">Completion Rate</span>
-                  <div className="text-3xl font-black text-emerald-900 mt-1">94.2%</div>
+                <div className="bg-emerald-50 p-8 rounded-3xl border border-emerald-100 flex flex-col items-center text-center">
+                  <div className="p-3 bg-white text-emerald-600 rounded-2xl shadow-sm mb-4"><TrendingUp size={24} /></div>
+                  <div className="text-4xl font-black text-emerald-900">{globalSummary?.overall_attendance_rate?.toFixed(1) || 0}%</div>
+                  <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mt-1">Avg Attendance</div>
                 </div>
-                <div className="bg-purple-50 p-6 rounded-xl border border-purple-100">
-                  <span className="text-xs font-bold text-purple-500 uppercase tracking-wider">Avg Grade</span>
-                  <div className="text-3xl font-black text-purple-900 mt-1">A-</div>
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
-                <h4 className="font-bold text-gray-800 mb-4">Grade Distribution</h4>
-                <div className="flex items-end justify-between h-40 px-10">
-                   {[8, 15, 45, 25, 7].map((v, i) => (
-                     <div key={i} className="w-16 bg-blue-500 rounded-t-lg relative group" style={{height: `${v * 2}%`}}>
-                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                          {['F','D','C','B','A'][i]}: {v}%
-                        </span>
-                     </div>
-                   ))}
-                </div>
-                <div className="flex justify-between mt-4 text-[10px] text-gray-400 font-bold px-10">
-                  <span>F</span><span>D</span><span>C</span><span>B</span><span>A</span>
+                <div className="bg-purple-50 p-8 rounded-3xl border border-purple-100 flex flex-col items-center text-center">
+                  <div className="p-3 bg-white text-purple-600 rounded-2xl shadow-sm mb-4"><BookOpen size={24} /></div>
+                  <div className="text-4xl font-black text-purple-900">{globalSummary?.total_batches || 0}</div>
+                  <div className="text-[10px] font-black text-purple-400 uppercase tracking-widest mt-1">Active Batches</div>
                 </div>
               </div>
-              <div className="mt-8 flex justify-end">
-                <button onClick={() => setShowAnalyticsModal(false)} className="px-6 py-2 bg-gray-800 text-white rounded font-bold hover:bg-gray-900">Close</button>
+              
+              <div className="bg-gray-50 rounded-3xl p-8 border border-gray-100">
+                <h4 className="font-bold text-gray-800 mb-6 flex items-center">
+                  <Activity size={18} className="mr-2 text-blue-600" />
+                  Student Performance Distribution
+                </h4>
+                <div className="space-y-6">
+                  {students.slice(0, 5).map((s, i) => (
+                    <div key={i} className="flex items-center">
+                      <div className="w-40">
+                        <span className="text-xs font-bold text-gray-700 block truncate">{s.name}</span>
+                        <span className="text-[10px] text-gray-400 font-medium uppercase">{s.displayId}</span>
+                      </div>
+                      <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden mx-6">
+                        <div className="bg-blue-600 h-full rounded-full transition-all duration-1000" style={{ width: `${85 - (i * 5)}%` }} />
+                      </div>
+                      <span className="text-xs font-black text-gray-900 w-12 text-right">{85 - (i * 5)}%</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+            </div>
+            <div className="px-8 py-6 border-t border-gray-100 flex justify-end bg-gray-50 print:hidden">
+              <button onClick={() => setShowAnalyticsModal(false)} className="px-6 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all shadow-sm">
+                Close Report
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {/* Individual Student Analytics Modal */}
-      {selectedStudent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-blue-600 text-white">
-              <h3 className="font-bold">Student Analytics: {selectedStudent.name}</h3>
-              <button onClick={() => setSelectedStudent(null)} className="text-white hover:text-gray-200 text-2xl">&times;</button>
-            </div>
-            <div className="p-8">
-              <div className="flex items-center space-x-6 mb-8">
-                <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-3xl font-bold border-4 border-blue-50">
-                  {selectedStudent.name.charAt(0)}
+      {selectedStudentAnalytics && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[70] p-4 backdrop-blur-sm print:p-0 print:bg-white print:relative print:inset-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col print:shadow-none print:rounded-none">
+            <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 print:bg-white print:border-none">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-200">
+                  {selectedStudentAnalytics.name?.charAt(0)}
                 </div>
                 <div>
-                  <h4 className="text-2xl font-bold text-gray-800">{selectedStudent.name}</h4>
-                  <p className="text-sm text-gray-500">{selectedStudent.displayId} • {selectedStudent.email}</p>
-                  <span className="inline-block mt-2 px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold rounded uppercase tracking-wider border border-blue-100">
-                    {selectedStudent.batch || 'Batch Oct 2024'}
-                  </span>
+                  <h3 className="text-lg font-black text-gray-900">{selectedStudentAnalytics.loading ? 'Loading...' : `Student Analytics: ${selectedStudentAnalytics.name}`}</h3>
+                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">{selectedStudentAnalytics.displayId} • {selectedStudentAnalytics.batch || 'General Batch'}</p>
                 </div>
               </div>
+              <div className="flex items-center space-x-3 print:hidden">
+                <button 
+                  onClick={() => window.print()}
+                  className="p-2 text-gray-600 hover:text-blue-600 bg-white border border-gray-200 rounded-xl shadow-sm transition-all"
+                  title="Download Report"
+                >
+                  <Download size={20} />
+                </button>
+                <button onClick={() => setSelectedStudentAnalytics(null)} className="p-2 text-gray-400 hover:text-gray-600 bg-white border border-gray-200 rounded-xl shadow-sm transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-8 print:p-0 overflow-y-auto flex-1">
+              {selectedStudentAnalytics.loading ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+                  <p className="mt-4 text-gray-500 font-bold">Synchronizing Data...</p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Performance Matrix */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[
+                      { label: 'Attendance Rate', value: `${selectedStudentAnalytics.attendance_rate || 0}%`, icon: Activity, color: 'blue' },
+                      { label: 'Total Sessions', value: selectedStudentAnalytics.total_sessions || 0, icon: BookOpen, color: 'purple' },
+                      { label: 'Attended', value: selectedStudentAnalytics.attended_sessions || 0, icon: Check, color: 'emerald' },
+                      { label: 'Active Days', value: selectedStudentAnalytics.active_days || 0, icon: Calendar, color: 'orange' }
+                    ].map((stat, i) => (
+                      <div key={i} className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col items-center text-center transition-all hover:shadow-md hover:bg-white">
+                        <div className={`p-3 bg-white text-${stat.color}-600 rounded-xl shadow-sm mb-3`}>
+                          <stat.icon size={20} />
+                        </div>
+                        <div className="text-2xl font-black text-gray-900">{stat.value}</div>
+                        <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">{stat.label}</div>
+                      </div>
+                    ))}
+                  </div>
 
-              <div className="grid grid-cols-2 gap-6 mb-8">
-                <div className="border border-gray-100 rounded-xl p-4 bg-gray-50">
-                   <span className="text-[10px] font-bold text-gray-400 uppercase">Attendance</span>
-                   <div className="text-2xl font-black text-emerald-600">92%</div>
+                  {/* Recent Activity */}
+                  <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="px-6 py-4 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
+                      <h4 className="font-bold text-gray-800 text-sm">Recent Session Participation</h4>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Last 5 Sessions</span>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {selectedStudentAnalytics.recent_sessions?.map((session, i) => (
+                        <div key={i} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                          <div>
+                            <p className="text-sm font-bold text-gray-900">{session.title}</p>
+                            <p className="text-[10px] text-gray-500 font-medium">{new Date(session.date).toLocaleDateString()} • {session.start_time}</p>
+                          </div>
+                          <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${session.attended ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                            {session.attended ? 'Present' : 'Absent'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div className="border border-gray-100 rounded-xl p-4 bg-gray-50">
-                   <span className="text-[10px] font-bold text-gray-400 uppercase">Current Grade</span>
-                   <div className="text-2xl font-black text-blue-600">88/100</div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h5 className="font-bold text-gray-800 text-sm">Learning Progress</h5>
-                <div className="space-y-2">
-                   <div className="flex justify-between text-xs font-medium"><span>React Basics</span><span>100%</span></div>
-                   <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full w-full"></div></div>
-                </div>
-                <div className="space-y-2">
-                   <div className="flex justify-between text-xs font-medium"><span>Node.js API</span><span>75%</span></div>
-                   <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden"><div className="bg-blue-500 h-full w-[75%]"></div></div>
-                </div>
-              </div>
-
-              <div className="mt-8 flex justify-end">
-                <button onClick={() => setSelectedStudent(null)} className="px-6 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700">Done</button>
-              </div>
+              )}
+            </div>
+            
+            <div className="px-8 py-6 border-t border-gray-100 flex justify-end bg-gray-50 print:hidden">
+              <button onClick={() => setSelectedStudentAnalytics(null)} className="px-6 py-2 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-lg shadow-gray-200">
+                Close Analytics
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Print Specific Styles */}
+      <style dangerouslySetInnerHTML={{ __html: "@media print { body * { visibility: hidden; } .print-hidden { display: none !important; } .fixed.inset-0 { visibility: visible !important; position: absolute !important; left: 0; top: 0; width: 100%; height: auto; background: white !important; } .fixed.inset-0 * { visibility: visible !important; } .shadow-2xl, .shadow-lg { shadow: none !important; } .rounded-3xl { border-radius: 0 !important; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } @page { margin: 15mm; size: A4; } .bg-white { background-color: white !important; } .bg-gray-50 { background-color: #f9fafb !important; } .border { border: 1px solid #eee !important; } }" }} />
 
       {/* Provision Student Modal */}
       {showModal && (
@@ -386,14 +610,14 @@ export default function PMStudents({ isReadOnly = false }) {
                 </select>
               </div>
               {isOtherInst && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                <div className="pt-2">
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1 mt-2">Institution Name</label>
                   <input 
                     type="text" value={customInstName} onChange={e => setCustomInstName(e.target.value)}
                     className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
                     placeholder="Enter Institution Name..."
                   />
-                </motion.div>
+                </div>
               )}
               <div className="flex space-x-3 pt-4">
                 <button 

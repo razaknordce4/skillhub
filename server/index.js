@@ -2147,20 +2147,62 @@ app.get("/student/marks", authenticateToken, authorizeRole("STUDENT"), async (re
 // --- Attendance Statistics Endpoints ---
 
 // Student attendance statistics
-app.get("/student/attendance-stats", authenticateToken, authorizeRole("STUDENT"), async (req, res) => {
+app.get("/student/attendance-stats", authenticateToken, authorizeRole("STUDENT", "PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER", "INSTITUTION", "TRAINER"), async (req, res) => {
   try {
+    const { studentId, startDate, endDate } = req.query;
+    
+    // Determine the target student ID
+    let targetStudentId = req.user.id;
+    if (studentId && ["PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER", "INSTITUTION", "TRAINER"].includes(req.user.role)) {
+      targetStudentId = parseInt(studentId);
+      
+      // Scoping checks
+      if (req.user.role === "INSTITUTION") {
+        const belongs = await prisma.user.findFirst({
+          where: {
+            id: targetStudentId,
+            OR: [
+              { institution_id: req.user.id },
+              { studentBatches: { some: { batch: { institution_id: req.user.id } } } }
+            ]
+          }
+        });
+        if (!belongs) return res.status(403).json({ message: "Forbidden: Access restricted to your institution's students" });
+      } else if (req.user.role === "TRAINER") {
+        // Trainer can see any student in their institution
+        const student = await prisma.user.findUnique({
+          where: { id: targetStudentId },
+          select: { institution_id: true }
+        });
+        
+        if (!student || student.institution_id !== req.user.institution_id) {
+          return res.status(403).json({ message: "Forbidden: Access restricted to students in your institution" });
+        }
+      }
+    }
+
+    const sessionFilter = {};
+    if (startDate || endDate) {
+      sessionFilter.date = {};
+      if (startDate) sessionFilter.date.gte = new Date(startDate);
+      if (endDate) sessionFilter.date.lte = new Date(endDate);
+    }
+
     const studentBatches = await prisma.batchStudent.findMany({
-      where: { student_id: req.user.id },
+      where: { student_id: targetStudentId },
       include: { batch: true }
     });
 
     const batchIds = studentBatches.map(bs => bs.batch_id);
     
     const sessions = await prisma.session.findMany({
-      where: { batch_id: { in: batchIds } },
+      where: { 
+        batch_id: { in: batchIds },
+        ...sessionFilter
+      },
       include: {
         attendance: {
-          where: { student_id: req.user.id }
+          where: { student_id: targetStudentId }
         }
       }
     });
@@ -2196,14 +2238,28 @@ app.get("/student/attendance-stats", authenticateToken, authorizeRole("STUDENT")
 });
 
 // Trainer attendance statistics
-app.get("/trainer/attendance-stats", authenticateToken, authorizeRole("TRAINER", "PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER"), async (req, res) => {
+app.get("/trainer/attendance-stats", authenticateToken, authorizeRole("TRAINER", "PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER", "INSTITUTION"), async (req, res) => {
   try {
     const { trainerId, startDate, endDate } = req.query;
     
     // Determine the target trainer ID
     let targetTrainerId = req.user.id;
-    if (trainerId && ["PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER"].includes(req.user.role)) {
+    if (trainerId && ["PROGRAMME_MANAGER", "ADMIN", "MONITORING_OFFICER", "INSTITUTION"].includes(req.user.role)) {
       targetTrainerId = parseInt(trainerId);
+      
+      // If institution role, verify trainer belongs to it
+      if (req.user.role === "INSTITUTION") {
+        const belongs = await prisma.user.findFirst({
+          where: {
+            id: targetTrainerId,
+            OR: [
+              { institution_id: req.user.id },
+              { trainerBatches: { some: { batch: { institution_id: req.user.id } } } }
+            ]
+          }
+        });
+        if (!belongs) return res.status(403).json({ message: "Forbidden: Access restricted to your institution's trainers" });
+      }
     }
 
     const sessionFilter = {};
@@ -2281,11 +2337,18 @@ app.get("/trainer/attendance-stats", authenticateToken, authorizeRole("TRAINER",
       };
     }));
 
+    const totalStudents = batchStats.reduce((sum, batch) => sum + batch.student_count, 0);
+    const overallAttendanceRate = batchStats.length > 0 
+      ? batchStats.reduce((sum, batch) => sum + batch.attendance_rate, 0) / batchStats.length 
+      : 0;
+
     res.json({
       total_sessions: totalSessions,
       upcoming_sessions: upcomingSessions,
       completed_sessions: completedSessions,
       batch_count: trainerBatches.length,
+      total_students: totalStudents,
+      overall_attendance_rate: Math.round(overallAttendanceRate * 10) / 10,
       batch_stats: batchStats
     });
   } catch (err) {

@@ -779,37 +779,7 @@ export default function ProgrammeManagerInstitutions() {
       )}
 
       {/* Print Specific Styles */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media print {
-          /* Hide everything by default */
-          body * { visibility: hidden; }
-          .print\\:hidden { display: none !important; }
-          
-          /* Show modal content if open */
-          ${showAnalyticsModal ? `
-            .fixed.inset-0 { visibility: visible !important; position: absolute !important; left: 0; top: 0; width: 100%; height: auto; background: white !important; }
-            .fixed.inset-0 * { visibility: visible !important; }
-            .shadow-2xl { shadow: none !important; }
-            .rounded-3xl { border-radius: 0 !important; }
-          ` : `
-            /* Show main content if modal is NOT open */
-            .p-6, .p-6 * { visibility: visible !important; }
-            .p-6 { position: absolute !important; left: 0; top: 0; width: 100%; }
-          `}
-          
-          /* Ensure backgrounds are printed */
-          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          
-          @page {
-            margin: 15mm;
-            size: A4;
-          }
-          
-          /* Force page breaks if needed */
-          .bg-white { background-color: white !important; }
-          .border { border: 1px solid #eee !important; }
-        }
-      `}} />
+      <style dangerouslySetInnerHTML={{ __html: "@media print { body * { visibility: hidden; } .print-hidden { display: none !important; } .fixed.inset-0 { visibility: visible !important; position: absolute !important; left: 0; top: 0; width: 100%; height: auto; background: white !important; } .fixed.inset-0 * { visibility: visible !important; } .shadow-2xl, .shadow-lg { shadow: none !important; } .rounded-3xl { border-radius: 0 !important; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } @page { margin: 15mm; size: A4; } .bg-white { background-color: white !important; } .bg-gray-50 { background-color: #f9fafb !important; } .border { border: 1px solid #eee !important; } }" }} />
     </div>
   );
 }
