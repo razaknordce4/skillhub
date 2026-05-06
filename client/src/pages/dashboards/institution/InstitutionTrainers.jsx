@@ -18,6 +18,7 @@ export default function InstitutionTrainers() {
   const [trainerName, setTrainerName] = useState('');
   const [trainerEmail, setTrainerEmail] = useState('');
   const [trainerPassword, setTrainerPassword] = useState('');
+  const [trainerSubject, setTrainerSubject] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
@@ -48,11 +49,12 @@ export default function InstitutionTrainers() {
         email: trainerEmail, 
         password: trainerPassword, 
         role: 'TRAINER',
+        subject: trainerSubject,
         institution_id: user.id
       });
       setToast({ type: 'success', message: 'Trainer registered successfully' });
       setShowAddModal(false);
-      setTrainerName(''); setTrainerEmail(''); setTrainerPassword('');
+      setTrainerName(''); setTrainerEmail(''); setTrainerPassword(''); setTrainerSubject('');
       fetchData();
     } catch (err) {
       setToast({ type: 'error', message: err.response?.data?.message || 'Error registering trainer' });
@@ -88,6 +90,7 @@ export default function InstitutionTrainers() {
     },
     { header: 'Trainer ID', accessor: 'displayId', render: (row) => <span className="font-mono text-xs font-bold text-blue-600">{row.displayId}</span> },
     { header: 'Email Address', accessor: 'email', render: (row) => <span className="text-gray-500">{row.email}</span> },
+    { header: 'Subject', accessor: 'subject', render: (row) => <span className="text-emerald-600 font-medium">{row.subject || 'N/A'}</span> },
     { 
       header: 'Assigned Batches', 
       accessor: 'trainerBatches', 
@@ -175,6 +178,10 @@ export default function InstitutionTrainers() {
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Password</label>
                 <input type="password" required value={trainerPassword} onChange={e => setTrainerPassword(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="••••••••"/>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Subject</label>
+                <input type="text" required value={trainerSubject} onChange={e => setTrainerSubject(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" placeholder="e.g. Mathematics, Computer Science"/>
               </div>
               <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-200 mt-2">Register Trainer</button>
             </form>

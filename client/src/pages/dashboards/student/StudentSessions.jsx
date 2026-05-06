@@ -64,6 +64,7 @@ const ATT_STYLES = {
   PRESENT: { label: 'Present', icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
   ABSENT:  { label: 'Absent',  icon: XCircle,     color: 'text-red-500 bg-red-50' },
   LATE:    { label: 'Late',    icon: AlertCircle,  color: 'text-amber-600 bg-amber-50' },
+  JOINED:  { label: 'Joined',  icon: CheckCircle, color: 'text-blue-600 bg-blue-50' },
 };
 
 export default function StudentSessions() {
@@ -77,9 +78,12 @@ export default function StudentSessions() {
   const [activeTab, setActiveTab] = useState('all');
   const [tick, setTick]           = useState(0); // refresh every minute for link availability
 
-  // Tick every 30s to re-evaluate link availability
+  // Real-time updates - poll every 30 seconds
   useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 30000);
+    const t = setInterval(() => {
+      setTick(n => n + 1);
+      fetchSessions(); // Refresh session data
+    }, 30000);
     return () => clearInterval(t);
   }, []);
 
@@ -104,8 +108,8 @@ export default function StudentSessions() {
     setJoining(session.id);
     try {
       const res = await axios.post(`/sessions/${session.id}/join`);
-      showToast('✅ Attendance marked! Opening session…');
-      // Refresh sessions to update attendance status
+      showToast('✅ Session joined! Attendance will be marked after session ends.');
+      // Refresh sessions to update join status
       fetchSessions();
       // Open link in new tab
       setTimeout(() => { window.open(res.data.meeting_link, '_blank', 'noopener'); }, 600);
@@ -309,15 +313,20 @@ export default function StudentSessions() {
                           <AttIcon size={12}/>
                           {attStyle.label}
                         </span>
+                      ) : session.myJoin ? (
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${ATT_STYLES.JOINED.color}`}>
+                          <CheckCircle size={12}/>
+                          {ATT_STYLES.JOINED.label}
+                        </span>
                       ) : (
-                        <span className="text-xs text-gray-400 italic">Not marked</span>
+                        <span className="text-xs text-gray-400 italic">Not joined</span>
                       )}
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         {/* Meeting link button */}
                         {session.meeting_link && (
-                          linkActive ? (
+                          linkActive && !session.myJoin ? (
                             <button
                               onClick={() => handleJoinSession(session)}
                               disabled={joining === session.id}

@@ -34,7 +34,6 @@ export default function DashboardLayout({ children }) {
           ...baseItems,
           { name: 'Sessions', path: '/dashboard/student/sessions', icon: BookOpen },
           { name: 'Trainers', path: '/dashboard/student/trainers', icon: Users },
-          { name: 'Marks', path: '/dashboard/student/marks', icon: BookOpen },
           { name: 'Attendance', path: '/dashboard/student/attendance', icon: Calendar },
           { name: 'Notifications', path: '/dashboard/student/notifications', icon: Activity }
         ];
@@ -42,7 +41,6 @@ export default function DashboardLayout({ children }) {
         return [
           ...baseItems,
           { name: 'Batches', path: '/dashboard/trainer/batches', icon: Users },
-          { name: 'Marks', path: '/dashboard/trainer/marks', icon: BookOpen },
           { name: 'Sessions', path: '/dashboard/trainer/sessions', icon: Calendar },
           { name: 'Notifications', path: '/dashboard/trainer/notifications', icon: Activity }
         ];

@@ -8,7 +8,7 @@ export default function StudentNotifications() {
   useEffect(() => {
     // Mocking notifications
     setNotifications([
-      { id: 1, title: 'New Mark Assigned', message: 'You have received a mark for Midterm Exam.', date: '2024-10-25', status: 'Unread' },
+      { id: 1, title: 'Assignment Completed', message: 'You have completed the physics assignment.', date: '2024-10-25', status: 'Unread' },
       { id: 2, title: 'Session Cancelled', message: 'Advanced CSS session for tomorrow is cancelled.', date: '2024-10-24', status: 'Read' }
     ]);
   }, []);

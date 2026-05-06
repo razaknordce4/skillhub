@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 
@@ -30,8 +30,9 @@ model User {
   studentBatches     BatchStudent[]
   trainerSessions    Session[]
   studentAttendances Attendance[]
-  studentMarks       Mark[]
   notifications      Notification[]
+  sessionJoins       SessionJoin[] @relation("StudentSessionJoins")
+  todos             Todo[]
 }
 
 model Batch {
@@ -45,7 +46,7 @@ model Batch {
   trainers BatchTrainer[]
   students BatchStudent[]
   sessions Session[]
-  marks    Mark[]
+  // sessionJoins SessionJoin[] @relation("BatchSessionJoins")
 }
 
 model BatchTrainer {
@@ -83,6 +84,7 @@ model Session {
   batch      Batch        @relation(fields: [batch_id], references: [id])
   trainer    User         @relation(fields: [trainer_id], references: [id])
   attendance Attendance[]
+  sessionJoins SessionJoin[] @relation("SessionJoins")
 }
 
 model Attendance {
@@ -99,18 +101,20 @@ model Attendance {
   @@unique([session_id, student_id])
 }
 
-model Mark {
+model SessionJoin {
   id         Int      @id @default(autoincrement())
+  session_id Int
   student_id Int
-  batch_id   Int
-  exam_title String
-  score      Int
-  status     String   @default("GRADED")
+  joined_at  DateTime @default(now())
+  marked     Boolean  @default(false)
   created_at DateTime @default(now())
 
-  student User  @relation(fields: [student_id], references: [id])
-  batch   Batch @relation(fields: [batch_id], references: [id])
+  session Session @relation("SessionJoins", fields: [session_id], references: [id])
+  student User    @relation("StudentSessionJoins", fields: [student_id], references: [id])
+
+  @@unique([session_id, student_id])
 }
+
 
 model Notification {
   id         Int      @id @default(autoincrement())
@@ -122,3 +126,20 @@ model Notification {
 
   user User @relation(fields: [user_id], references: [id])
 }
+
+model Todo {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  title       String
+  description String?
+  completed   Boolean  @default(false)
+  due_date    DateTime?
+  auto_delete  Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id])
+}
+
+
+

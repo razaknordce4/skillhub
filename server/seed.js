@@ -71,15 +71,6 @@ async function main() {
     }
   });
 
-  // 5. Create Mark
-  await prisma.mark.create({
-    data: {
-      student_id: student.id,
-      batch_id: batch.id,
-      exam_title: 'React Basics Quiz',
-      score: 95
-    }
-  });
 
   console.log('✅ Seeding complete!');
   console.log('Credentials:');

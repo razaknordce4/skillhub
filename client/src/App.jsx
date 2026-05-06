@@ -33,7 +33,6 @@ import InstitutionTrainers from './pages/dashboards/institution/InstitutionTrain
 import InstitutionAttendance from './pages/dashboards/institution/InstitutionAttendance';
 import TrainerSessions from './pages/dashboards/trainer/TrainerSessions';
 import TrainerInvites from './pages/dashboards/trainer/TrainerInvites';
-import TrainerMarks from './pages/dashboards/trainer/TrainerMarks';
 import StudentSessions from './pages/dashboards/student/StudentSessions';
 import StudentAttendance from './pages/dashboards/student/StudentAttendance';
 import DashboardNotifications from './pages/dashboards/shared/DashboardNotifications';
@@ -120,9 +119,6 @@ const AppRoutes = () => {
       <Route path="/dashboard/student/trainers" element={
         <ProtectedRoute allowedRoles={['STUDENT']}><DashboardLayout><PMTrainers isReadOnly={true} /></DashboardLayout></ProtectedRoute>
       } />
-      <Route path="/dashboard/student/marks" element={
-        <ProtectedRoute allowedRoles={['STUDENT']}><DashboardLayout><TrainerMarks isReadOnly={true} /></DashboardLayout></ProtectedRoute>
-      } />
       <Route path="/dashboard/student/attendance" element={
         <ProtectedRoute allowedRoles={['STUDENT']}><DashboardLayout><StudentAttendance /></DashboardLayout></ProtectedRoute>
       } />
@@ -139,9 +135,6 @@ const AppRoutes = () => {
       } />
       <Route path="/dashboard/trainer/batches" element={
         <ProtectedRoute allowedRoles={['TRAINER']}><DashboardLayout><TrainerInvites /></DashboardLayout></ProtectedRoute>
-      } />
-      <Route path="/dashboard/trainer/marks" element={
-        <ProtectedRoute allowedRoles={['TRAINER']}><DashboardLayout><TrainerMarks /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/trainer/notifications" element={
         <ProtectedRoute allowedRoles={['TRAINER']}><DashboardLayout><DashboardNotifications /></DashboardLayout></ProtectedRoute>

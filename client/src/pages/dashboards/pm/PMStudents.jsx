@@ -132,7 +132,7 @@ export default function PMStudents({ isReadOnly = false }) {
     { label: 'Batch', type: 'text', value: searchBatch, onChange: setSearchBatch, placeholder: 'Search Batch...' }
   ];
 
-  const filteredData = students.filter(s => {
+  const filteredData = (Array.isArray(students) ? students : []).filter(s => {
     const matchesId = s.displayId?.toLowerCase().includes(searchId.toLowerCase()) || !searchId;
     const matchesName = s.name?.toLowerCase().includes(searchName.toLowerCase()) || !searchName;
     const matchesEmail = s.email?.toLowerCase().includes(searchEmail.toLowerCase()) || !searchEmail;
@@ -207,7 +207,7 @@ export default function PMStudents({ isReadOnly = false }) {
     baseColumns[5] // Analytics
   ];
 
-  const filteredInstitutions = institutions.filter(inst => 
+  const filteredInstitutions = (Array.isArray(institutions) ? institutions : []).filter(inst => 
     inst.name.toLowerCase().includes(instSearch.toLowerCase())
   );
 

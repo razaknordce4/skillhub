@@ -5,8 +5,10 @@ import Toast from '../../../components/ui/Toast';
 import DeleteConfirmationModal from '../../../components/ui/DeleteConfirmationModal';
 import { AnimatePresence } from 'framer-motion';
 import { User, Pencil, Trash2 } from 'lucide-react';
+import { useAuth } from '../../../context/AuthContext';
 
 export default function PMTrainers({ isReadOnly = false }) {
+  const { user } = useAuth();
   const [trainers, setTrainers] = useState([]);
   const [globalSummary, setGlobalSummary] = useState(null);
   const [searchId, setSearchId] = useState('');
@@ -38,7 +40,7 @@ export default function PMTrainers({ isReadOnly = false }) {
     fetchTrainers();
     fetchGlobalSummary();
     fetchInstitutions();
-  }, []);
+  }, [user]);
 
   const fetchInstitutions = async () => {
     try {
@@ -166,8 +168,38 @@ export default function PMTrainers({ isReadOnly = false }) {
     },
     {
       header: 'Subject',
-      accessor: 'subject',
-      render: (row) => <span className="text-emerald-600 font-medium">{row.subject || 'N/A'}</span>
+      accessor: 'subjects',
+      render: (row) => {
+        // Get subjects from single subject field
+        const subjects = [];
+        const singleSubject = row.subject;
+        
+        // Use the single subject field
+        const allSubjects = singleSubject ? [singleSubject] : [];;
+        
+        if (allSubjects.length === 0) {
+          return <span className="text-gray-400 font-medium">N/A</span>;
+        }
+        
+        if (allSubjects.length === 1) {
+          return <span className="text-emerald-600 font-medium">{allSubjects[0]}</span>;
+        }
+        
+        return (
+          <select 
+            className="text-emerald-600 font-medium bg-transparent border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
+            value={allSubjects[0]}
+            onChange={(e) => e.target.value}
+            title={`Subjects: ${allSubjects.join(', ')}`}
+          >
+            {allSubjects.map((subject, index) => (
+              <option key={index} value={subject}>
+                {subject}
+              </option>
+            ))}
+          </select>
+        );
+      }
     }
   ];
 
@@ -212,7 +244,7 @@ export default function PMTrainers({ isReadOnly = false }) {
   return (
     <div className="h-full p-6">
       <DataTable 
-        title={<span>Trainers Management <span className="text-sm text-gray-400 font-normal ml-2">Total: {filteredData.length}</span></span>}
+        title={<span>{user?.role === 'STUDENT' ? 'Our Trainers' : 'Trainers Management'} <span className="text-sm text-gray-400 font-normal ml-2">Total: {filteredData.length}</span></span>}
         filters={filters}
         columns={columns}
         data={filteredData}

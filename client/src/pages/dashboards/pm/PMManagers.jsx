@@ -123,7 +123,7 @@ export default function PMManagers({ isReadOnly = false }) {
     }
   };
 
-  const filteredInstitutions = institutions.filter(inst => 
+  const filteredInstitutions = (Array.isArray(institutions) ? institutions : []).filter(inst => 
     inst.name.toLowerCase().includes(instSearch.toLowerCase())
   );
 
@@ -133,7 +133,7 @@ export default function PMManagers({ isReadOnly = false }) {
     { label: 'Email', type: 'text', value: searchEmail, onChange: setSearchEmail, placeholder: 'Search Email...' }
   ];
 
-  const filteredData = officers.filter(o => {
+  const filteredData = (Array.isArray(officers) ? officers : []).filter(o => {
     const matchesId = o.displayId?.toLowerCase().includes(searchId.toLowerCase()) || !searchId;
     const matchesName = o.name?.toLowerCase().includes(searchName.toLowerCase()) || !searchName;
     const matchesEmail = o.email?.toLowerCase().includes(searchEmail.toLowerCase()) || !searchEmail;

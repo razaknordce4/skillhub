@@ -12,7 +12,7 @@ export default function TrainerInvites() {
 
   const fetchBatches = async () => {
     try {
-      const res = await axios.get('/batches');
+      const res = await axios.get('/api/batches');
       setBatches(res.data);
     } catch (err) {
       console.error(err);

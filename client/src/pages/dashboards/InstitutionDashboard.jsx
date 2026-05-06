@@ -1,36 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ChevronRight, Filter, Download, Plus, Users, BookOpen, Activity, Calendar } from 'lucide-react';
+import { ChevronRight, Filter, Download, Plus, Users, BookOpen, Activity, Calendar, TrendingUp } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { motion } from 'framer-motion';
 
 export default function InstitutionDashboard() {
   const { user } = useAuth();
-  const [summary, setSummary] = useState(null);
-  const [batches, setBatches] = useState([]);
-  const [students, setStudents] = useState([]);
+  const [attendanceStats, setAttendanceStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
-      fetchData();
+      fetchAttendanceStats();
     }
   }, [user]);
 
-  const fetchData = async () => {
+  const fetchAttendanceStats = async () => {
     setLoading(true);
     try {
-      const instId = user.id;
-      const [bRes, sRes, stdRes] = await Promise.all([
-        axios.get('/batches'),
-        axios.get(`/institutions/${instId}/summary`),
-        axios.get('/users?role=STUDENT')
-      ]);
-      setBatches(bRes.data);
-      setSummary(sRes.data);
-      setStudents(stdRes.data);
+      const res = await axios.get('/api/institution/attendance-stats');
+      setAttendanceStats(res.data);
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching attendance stats:', err);
     } finally {
       setLoading(false);
     }
@@ -62,10 +53,10 @@ export default function InstitutionDashboard() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'Total Batches', value: summary?.total_batches || 0, icon: BookOpen, color: 'blue' },
-          { label: 'Total Students', value: students.length, icon: Users, color: 'emerald' },
-          { label: 'Total Sessions', value: summary?.total_sessions || 0, icon: Calendar, color: 'purple' },
-          { label: 'Avg Attendance', value: `${summary?.overall_attendance_rate?.toFixed(1) || 0}%`, icon: Activity, color: 'orange' }
+          { label: 'Total Batches', value: attendanceStats?.total_batches || 0, icon: BookOpen, color: 'blue' },
+          { label: 'Total Sessions', value: attendanceStats?.total_sessions || 0, icon: Calendar, color: 'purple' },
+          { label: 'Avg Attendance', value: `${attendanceStats?.overall_attendance_rate || 0}%`, icon: Activity, color: 'orange' },
+          { label: 'Total Students', value: attendanceStats?.batch_stats?.reduce((sum, batch) => sum + batch.student_count, 0) || 0, icon: Users, color: 'emerald' }
         ].map((card, i) => (
           <motion.div 
             key={i}
@@ -89,80 +80,110 @@ export default function InstitutionDashboard() {
       {/* Main Charts & Table Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Performance Overview (Chart Mockup) */}
+        {/* Batch Performance Overview */}
         <div className="lg:col-span-2 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
           <div className="flex justify-between items-center mb-8">
             <h3 className="font-bold text-gray-800 flex items-center text-lg">
-              Attendance Trends
-              <span className="ml-2 text-xs font-normal text-gray-400 bg-gray-50 px-2 py-0.5 rounded">Last 6 Months</span>
+              Batch Performance
+              <span className="ml-2 text-xs font-normal text-gray-400 bg-gray-50 px-2 py-0.5 rounded">All Batches</span>
             </h3>
-            <div className="flex space-x-2">
-              {['Pass', 'Fail', 'In-Progress'].map(label => (
-                <div key={label} className="flex items-center text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                  <div className={`w-2 h-2 rounded-full mr-1 ${label === 'Pass' ? 'bg-blue-400' : label === 'Fail' ? 'bg-red-400' : 'bg-gray-300'}`} />
-                  {label}
-                </div>
-              ))}
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="w-4 h-4 text-green-500" />
+              <span className="text-sm font-medium text-green-600">
+                {attendanceStats?.overall_attendance_rate || 0}% Avg
+              </span>
             </div>
           </div>
           
-          <div className="h-64 flex items-end justify-between px-2 pb-2 relative border-b border-gray-100">
-            {/* Background Lines */}
-            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-50">
-              {[1, 2, 3, 4].map(l => <div key={l} className="border-t border-gray-50 w-full" />)}
-            </div>
-            
-            {/* Mock Bars */}
-            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month, i) => (
-              <div key={month} className="flex flex-col items-center group w-12 cursor-pointer">
-                <div className="w-8 flex flex-col-reverse items-center gap-1 h-48">
-                  <motion.div 
-                    initial={{ height: 0 }}
-                    animate={{ height: `${20 + Math.random() * 60}%` }}
-                    className="w-full bg-blue-500 rounded-t-sm group-hover:bg-blue-600 transition-colors shadow-lg shadow-blue-100"
-                  />
-                  <motion.div 
-                    initial={{ height: 0 }}
-                    animate={{ height: `${10 + Math.random() * 20}%` }}
-                    className="w-full bg-gray-100 rounded-t-sm group-hover:bg-gray-200 transition-colors"
-                  />
+          <div className="space-y-4">
+            {attendanceStats?.batch_stats?.map((batch, index) => (
+              <div key={batch.batch_id} className="border border-gray-100 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="font-semibold text-gray-900">{batch.batch_name}</h4>
+                    <p className="text-sm text-gray-500">
+                      {batch.student_count} students • {batch.trainer_count} trainers
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-lg font-bold text-blue-600">{batch.attendance_rate}%</span>
+                    <p className="text-xs text-gray-500">attendance</p>
+                  </div>
                 </div>
-                <span className="mt-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">{month}</span>
+                
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${batch.attendance_rate}%` }}
+                  ></div>
+                </div>
+                
+                <div className="flex justify-between text-xs text-gray-500 mt-2">
+                  <span>{batch.total_sessions} sessions conducted</span>
+                  <span>{Math.round(batch.attendance_rate * batch.student_count * batch.total_sessions / 100)} attendances</span>
+                </div>
               </div>
             ))}
+            
+            {(!attendanceStats?.batch_stats || attendanceStats.batch_stats.length === 0) && (
+              <div className="text-center py-12">
+                <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">No batches found</p>
+                <p className="text-sm text-gray-400 mt-1">Create your first batch to get started</p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Status Distribution */}
+        {/* Institution Stats */}
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col">
-          <h3 className="font-bold text-gray-800 mb-8 text-lg">Batch Distribution</h3>
-          <div className="flex-1 flex items-center justify-center relative">
-            <svg viewBox="0 0 100 100" className="w-48 h-48 transform -rotate-90">
-              <circle cx="50" cy="50" r="40" fill="transparent" stroke="#f3f4f6" strokeWidth="12" />
-              <circle cx="50" cy="50" r="40" fill="transparent" stroke="#3b82f6" strokeWidth="12" strokeDasharray="180 251.2" strokeLinecap="round" />
-              <circle cx="50" cy="50" r="40" fill="transparent" stroke="#10b981" strokeWidth="12" strokeDasharray="50 251.2" strokeDashoffset="-180" strokeLinecap="round" />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-gray-900">{batches.length}</span>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Active</span>
+          <h3 className="font-bold text-gray-800 mb-8 text-lg">Institution Overview</h3>
+          <div className="flex-1 space-y-6">
+            <div className="text-center">
+              <div className="text-4xl font-black text-gray-900">{attendanceStats?.total_batches || 0}</div>
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Total Batches</div>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Total Students</span>
+                <span className="text-lg font-bold text-gray-900">
+                  {attendanceStats?.batch_stats?.reduce((sum, batch) => sum + batch.student_count, 0) || 0}
+                </span>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Total Trainers</span>
+                <span className="text-lg font-bold text-gray-900">
+                  {attendanceStats?.batch_stats?.reduce((sum, batch) => sum + batch.trainer_count, 0) || 0}
+                </span>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Total Sessions</span>
+                <span className="text-lg font-bold text-gray-900">{attendanceStats?.total_sessions || 0}</span>
+              </div>
+              
+              <div className="pt-4 border-t border-gray-100">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600">Overall Attendance</span>
+                  <span className="text-lg font-bold text-blue-600">{attendanceStats?.overall_attendance_rate || 0}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${attendanceStats?.overall_attendance_rate || 0}%` }}
+                  ></div>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="mt-8 space-y-3">
-             <div className="flex justify-between items-center text-sm">
-                <div className="flex items-center text-gray-600 font-medium"><div className="w-3 h-3 bg-blue-500 rounded-full mr-2" /> IT Batches</div>
-                <span className="font-bold text-gray-900">72%</span>
-             </div>
-             <div className="flex justify-between items-center text-sm">
-                <div className="flex items-center text-gray-600 font-medium"><div className="w-3 h-3 bg-emerald-500 rounded-full mr-2" /> Soft Skills</div>
-                <span className="font-bold text-gray-900">28%</span>
-             </div>
-          </div>
         </div>
 
-        {/* Recent Students Table */}
+        {/* Batch Performance Table */}
         <div className="lg:col-span-3 bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
-            <h3 className="font-bold text-gray-800 text-lg">Student Performance Overview</h3>
+            <h3 className="font-bold text-gray-800 text-lg">Batch Performance Overview</h3>
             <button className="text-blue-600 text-xs font-bold hover:underline flex items-center">
               View Detailed Analytics <ChevronRight size={14} className="ml-1" />
             </button>
@@ -171,35 +192,39 @@ export default function InstitutionDashboard() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-white text-gray-400 uppercase text-[10px] font-black tracking-widest">
-                  <th className="px-6 py-4">Student Name</th>
-                  <th className="px-6 py-4">Display ID</th>
-                  <th className="px-6 py-4">Email Address</th>
-                  <th className="px-6 py-4 text-center">Batch Status</th>
-                  <th className="px-6 py-4 text-right">Attendance</th>
+                  <th className="px-6 py-4">Batch Name</th>
+                  <th className="px-6 py-4 text-center">Students</th>
+                  <th className="px-6 py-4 text-center">Trainers</th>
+                  <th className="px-6 py-4 text-center">Sessions</th>
+                  <th className="px-6 py-4 text-right">Attendance Rate</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {students.slice(0, 8).map((student, i) => (
+                {attendanceStats?.batch_stats?.map((batch, i) => (
                   <tr key={i} className="hover:bg-gray-50 transition-colors group">
-                    <td className="px-6 py-4 font-bold text-gray-800">{student.name}</td>
-                    <td className="px-6 py-4 font-mono text-xs text-blue-600 font-bold">{student.displayId || 'ST-NA'}</td>
-                    <td className="px-6 py-4 text-gray-500 text-sm">{student.email}</td>
+                    <td className="px-6 py-4 font-bold text-gray-800">{batch.batch_name}</td>
                     <td className="px-6 py-4 text-center">
-                       <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded tracking-wide border border-emerald-100">Enrolled</span>
+                      <span className="px-2 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded">{batch.student_count}</span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="px-2 py-1 bg-purple-50 text-purple-600 text-xs font-bold rounded">{batch.trainer_count}</span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="px-2 py-1 bg-gray-50 text-gray-600 text-xs font-bold rounded">{batch.total_sessions}</span>
                     </td>
                     <td className="px-6 py-4 text-right">
                        <div className="flex items-center justify-end">
                          <div className="w-24 h-1.5 bg-gray-100 rounded-full mr-3 overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${student.attendance_rate || 0}%` }} />
+                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${batch.attendance_rate}%` }} />
                          </div>
-                         <span className="font-bold text-gray-900 text-sm">{student.attendance_rate?.toFixed(1) || 0}%</span>
+                         <span className="font-bold text-gray-900 text-sm">{batch.attendance_rate}%</span>
                        </div>
                     </td>
                   </tr>
                 ))}
-                {students.length === 0 && (
+                {(!attendanceStats?.batch_stats || attendanceStats.batch_stats.length === 0) && (
                   <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center text-gray-400 font-medium">No student data available for your institution yet.</td>
+                    <td colSpan="5" className="px-6 py-12 text-center text-gray-400 font-medium">No batch data available for your institution yet.</td>
                   </tr>
                 )}
               </tbody>
