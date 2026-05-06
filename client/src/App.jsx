@@ -141,6 +141,9 @@ const AppRoutes = () => {
       <Route path="/dashboard/trainer/batches" element={
         <ProtectedRoute allowedRoles={['TRAINER']}><DashboardLayout><TrainerInvites /></DashboardLayout></ProtectedRoute>
       } />
+      <Route path="/dashboard/trainer/students" element={
+        <ProtectedRoute allowedRoles={['TRAINER']}><DashboardLayout><PMStudents isReadOnly={true} /></DashboardLayout></ProtectedRoute>
+      } />
       <Route path="/dashboard/trainer/notifications" element={
         <ProtectedRoute allowedRoles={['TRAINER']}><DashboardLayout><TrainerNotifications /></DashboardLayout></ProtectedRoute>
       } />

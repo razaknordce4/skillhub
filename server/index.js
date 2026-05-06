@@ -536,14 +536,13 @@ app.get("/users", authenticateToken, async (req, res) => {
         where.institution_id = -1;
       }
     } else if (req.user.role === "TRAINER") {
-      // Trainers can only see students in batches they are assigned to
-      const trainerBatches = await prisma.batchTrainer.findMany({
-        where: { trainer_id: req.user.id },
-        select: { batch_id: true }
-      });
-      const batchIds = trainerBatches.map(b => b.batch_id);
-      where.role = "STUDENT";
-      where.studentBatches = { some: { batch_id: { in: batchIds } } };
+      // Trainers can see all students in their institution
+      if (req.user.institution_id) {
+        where.role = "STUDENT";
+        where.institution_id = req.user.institution_id;
+      } else {
+        where.institution_id = -1; // No institution assigned
+      }
     } else if (institution_id && req.user.role !== "STUDENT") {
       // Only use institution_id parameter for non-student users
       where.institution_id = parseInt(institution_id);

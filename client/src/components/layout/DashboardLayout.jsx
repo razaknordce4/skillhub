@@ -42,6 +42,7 @@ export default function DashboardLayout({ children }) {
           ...baseItems,
           { name: 'Batches', path: '/dashboard/trainer/batches', icon: Users },
           { name: 'Sessions', path: '/dashboard/trainer/sessions', icon: Calendar },
+          { name: 'Students', path: '/dashboard/trainer/students', icon: Users },
           { name: 'Notifications', path: '/dashboard/trainer/notifications', icon: Bell }
         ];
       case 'INSTITUTION':
