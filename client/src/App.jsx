@@ -29,15 +29,19 @@ import PMInstitutions from './pages/dashboards/pm/PMInstitutions';
 import PMTrainers from './pages/dashboards/pm/PMTrainers';
 import PMStudents from './pages/dashboards/pm/PMStudents';
 import PMManagers from './pages/dashboards/pm/PMManagers';
+import PMNotifications from './pages/dashboards/pm/PMNotifications';
 import InstitutionBatches from './pages/dashboards/institution/InstitutionBatches';
 import InstitutionTrainers from './pages/dashboards/institution/InstitutionTrainers';
 import InstitutionAttendance from './pages/dashboards/institution/InstitutionAttendance';
+import InstitutionNotifications from './pages/dashboards/institution/InstitutionNotifications';
 import TrainerSessions from './pages/dashboards/trainer/TrainerSessions';
 import TrainerInvites from './pages/dashboards/trainer/TrainerInvites';
+import TrainerNotifications from './pages/dashboards/trainer/TrainerNotifications';
 import StudentSessions from './pages/dashboards/student/StudentSessions';
 import StudentAttendance from './pages/dashboards/student/StudentAttendance';
 import DashboardNotifications from './pages/dashboards/shared/DashboardNotifications';
 import MOAnalytics from './pages/dashboards/mo/MOAnalytics';
+import MONotifications from './pages/dashboards/mo/MONotifications';
 import Profile from './pages/dashboards/Profile';
 
 import skillBridge1Img from './assets/skill_bridge1-removebg-preview.png';
@@ -138,7 +142,7 @@ const AppRoutes = () => {
         <ProtectedRoute allowedRoles={['TRAINER']}><DashboardLayout><TrainerInvites /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/trainer/notifications" element={
-        <ProtectedRoute allowedRoles={['TRAINER']}><DashboardLayout><DashboardNotifications /></DashboardLayout></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['TRAINER']}><DashboardLayout><TrainerNotifications /></DashboardLayout></ProtectedRoute>
       } />
 
       {/* Institution */}
@@ -158,7 +162,7 @@ const AppRoutes = () => {
         <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><InstitutionAttendance /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/institution/notifications" element={
-        <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><DashboardNotifications /></DashboardLayout></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><InstitutionNotifications /></DashboardLayout></ProtectedRoute>
       } />
 
       {/* Programme Manager */}
@@ -178,7 +182,7 @@ const AppRoutes = () => {
         <ProtectedRoute allowedRoles={['PROGRAMME_MANAGER']}><DashboardLayout><PMManagers /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/programme-manager/notifications" element={
-        <ProtectedRoute allowedRoles={['PROGRAMME_MANAGER']}><DashboardLayout><DashboardNotifications /></DashboardLayout></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['PROGRAMME_MANAGER']}><DashboardLayout><PMNotifications /></DashboardLayout></ProtectedRoute>
       } />
 
       {/* Monitoring Officer */}
@@ -186,7 +190,7 @@ const AppRoutes = () => {
         <ProtectedRoute allowedRoles={['MONITORING_OFFICER']}><DashboardLayout><MonitoringOfficerDashboard /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/monitoring-officer/notifications" element={
-        <ProtectedRoute allowedRoles={['MONITORING_OFFICER']}><DashboardLayout><DashboardNotifications /></DashboardLayout></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['MONITORING_OFFICER']}><DashboardLayout><MONotifications /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/monitoring-officer/institutions" element={
         <ProtectedRoute allowedRoles={['MONITORING_OFFICER']}><DashboardLayout><PMInstitutions isReadOnly={true} /></DashboardLayout></ProtectedRoute>

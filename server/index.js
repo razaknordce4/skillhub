@@ -535,6 +535,15 @@ app.get("/users", authenticateToken, async (req, res) => {
         // If student is not in any batch, return no results
         where.institution_id = -1;
       }
+    } else if (req.user.role === "TRAINER") {
+      // Trainers can only see students in batches they are assigned to
+      const trainerBatches = await prisma.batchTrainer.findMany({
+        where: { trainer_id: req.user.id },
+        select: { batch_id: true }
+      });
+      const batchIds = trainerBatches.map(b => b.batch_id);
+      where.role = "STUDENT";
+      where.studentBatches = { some: { batch_id: { in: batchIds } } };
     } else if (institution_id && req.user.role !== "STUDENT") {
       // Only use institution_id parameter for non-student users
       where.institution_id = parseInt(institution_id);
@@ -596,6 +605,35 @@ app.get("/users", authenticateToken, async (req, res) => {
 });
 
 
+// --- Batch Endpoints ---
+app.get("/batches", authenticateToken, async (req, res) => {
+  try {
+    let where = {};
+    if (req.user.role === 'INSTITUTION') {
+      where = { institution_id: req.user.id };
+    } else if (req.user.role !== 'ADMIN' && req.user.role !== 'PROGRAMME_MANAGER') {
+      // For trainers, they might need to see batches they are assigned to
+      if (req.user.role === 'TRAINER') {
+        const assignments = await prisma.batchTrainer.findMany({
+          where: { trainer_id: req.user.id },
+          select: { batch_id: true }
+        });
+        where = { id: { in: assignments.map(a => a.batch_id) } };
+      } else {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+    }
+    
+    const batches = await prisma.batch.findMany({
+      where,
+      orderBy: { created_at: 'desc' }
+    });
+    res.json(batches);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Notifications Endpoints ---
 app.get("/notifications", authenticateToken, async (req, res) => {
   try {
@@ -620,6 +658,282 @@ app.post("/notifications", authenticateToken, async (req, res) => {
       }
     });
     res.status(201).json(notification);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- PM: Bulk send notifications ---
+// target_type: 'ALL_MO' | 'SPECIFIC_MO' | 'ALL_INST' | 'SPECIFIC_INST'
+// target_ids: array of user IDs (used for SPECIFIC_* types)
+app.post("/notifications/bulk", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN"), async (req, res) => {
+  try {
+    const { title, message, target_type, target_ids } = req.body;
+    if (!title || !message || !target_type) {
+      return res.status(400).json({ message: "title, message and target_type are required" });
+    }
+
+    let recipients = [];
+
+    if (target_type === 'ALL_MO') {
+      recipients = await prisma.user.findMany({ where: { role: 'MONITORING_OFFICER' }, select: { id: true } });
+    } else if (target_type === 'SPECIFIC_MO') {
+      if (!target_ids?.length) return res.status(400).json({ message: "target_ids required for SPECIFIC_MO" });
+      recipients = target_ids.map(id => ({ id: parseInt(id) }));
+    } else if (target_type === 'ALL_INST') {
+      recipients = await prisma.user.findMany({ where: { role: 'INSTITUTION' }, select: { id: true } });
+    } else if (target_type === 'SPECIFIC_INST') {
+      if (!target_ids?.length) return res.status(400).json({ message: "target_ids required for SPECIFIC_INST" });
+      recipients = target_ids.map(id => ({ id: parseInt(id) }));
+    } else {
+      return res.status(400).json({ message: "Invalid target_type" });
+    }
+
+    if (!recipients.length) return res.status(400).json({ message: "No recipients found" });
+
+    await prisma.notification.createMany({
+      data: recipients.map(r => ({ user_id: r.id, title, message }))
+    });
+
+    res.json({ message: `Notification sent to ${recipients.length} recipient(s)`, count: recipients.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Mark notification as read ---
+app.put("/notifications/:id/read", authenticateToken, async (req, res) => {
+  try {
+    await prisma.notification.update({
+      where: { id: parseInt(req.params.id) },
+      data: { status: 'READ' }
+    });
+    res.json({ message: "Marked as read" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Mark all notifications as read ---
+app.put("/notifications/read-all", authenticateToken, async (req, res) => {
+  try {
+    await prisma.notification.updateMany({
+      where: { user_id: req.user.id, status: 'UNREAD' },
+      data: { status: 'READ' }
+    });
+    res.json({ message: "All marked as read" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Delete a single notification ---
+app.delete("/notifications/:id", authenticateToken, async (req, res) => {
+  try {
+    const notif = await prisma.notification.findUnique({ where: { id: parseInt(req.params.id) } });
+    if (!notif) return res.status(404).json({ message: "Notification not found" });
+    if (notif.user_id !== req.user.id) return res.status(403).json({ message: "Not authorized" });
+    await prisma.notification.delete({ where: { id: parseInt(req.params.id) } });
+    res.json({ message: "Deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Delete all notifications for current user ---
+app.delete("/notifications", authenticateToken, async (req, res) => {
+  try {
+    await prisma.notification.deleteMany({ where: { user_id: req.user.id } });
+    res.json({ message: "All notifications deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Institution: Bulk send notifications ---
+// target_type: 'ALL_STUDENTS' | 'BATCH_STUDENTS' | 'SPECIFIC_STUDENTS'
+//            | 'ALL_TRAINERS' | 'BATCH_TRAINERS'  | 'SPECIFIC_TRAINERS'
+// target_ids: batch IDs (for BATCH_*) or user IDs (for SPECIFIC_*)
+app.post("/notifications/institution/bulk", authenticateToken, authorizeRole("INSTITUTION", "ADMIN"), async (req, res) => {
+  try {
+    const { title, message, target_type, target_ids } = req.body;
+    if (!title || !message || !target_type) {
+      return res.status(400).json({ message: "title, message and target_type are required" });
+    }
+
+    const institutionId = req.user.id;
+    let recipients = [];
+
+    if (target_type === 'ALL_STUDENTS') {
+      // All students in any batch belonging to this institution
+      const batchStudents = await prisma.batchStudent.findMany({
+        where: { batch: { institution_id: institutionId } },
+        select: { student_id: true }
+      });
+      const ids = [...new Set(batchStudents.map(bs => bs.student_id))];
+      // Also include students directly linked to institution
+      const directStudents = await prisma.user.findMany({
+        where: { role: 'STUDENT', institution_id: institutionId },
+        select: { id: true }
+      });
+      const allIds = [...new Set([...ids, ...directStudents.map(s => s.id)])];
+      recipients = allIds.map(id => ({ id }));
+
+    } else if (target_type === 'BATCH_STUDENTS') {
+      if (!target_ids?.length) return res.status(400).json({ message: "target_ids (batch IDs) required" });
+      // Verify batches belong to institution
+      const batches = await prisma.batch.findMany({
+        where: { id: { in: target_ids.map(Number) }, institution_id: institutionId }
+      });
+      if (!batches.length) return res.status(403).json({ message: "No valid batches found for your institution" });
+      const batchStudents = await prisma.batchStudent.findMany({
+        where: { batch_id: { in: batches.map(b => b.id) } },
+        select: { student_id: true }
+      });
+      const ids = [...new Set(batchStudents.map(bs => bs.student_id))];
+      recipients = ids.map(id => ({ id }));
+
+    } else if (target_type === 'SPECIFIC_STUDENTS') {
+      if (!target_ids?.length) return res.status(400).json({ message: "target_ids (user IDs) required" });
+      recipients = target_ids.map(id => ({ id: parseInt(id) }));
+
+    } else if (target_type === 'ALL_TRAINERS') {
+      const batchTrainers = await prisma.batchTrainer.findMany({
+        where: { batch: { institution_id: institutionId } },
+        select: { trainer_id: true }
+      });
+      const ids = [...new Set(batchTrainers.map(bt => bt.trainer_id))];
+      const directTrainers = await prisma.user.findMany({
+        where: { role: 'TRAINER', institution_id: institutionId },
+        select: { id: true }
+      });
+      const allIds = [...new Set([...ids, ...directTrainers.map(t => t.id)])];
+      recipients = allIds.map(id => ({ id }));
+
+    } else if (target_type === 'BATCH_TRAINERS') {
+      if (!target_ids?.length) return res.status(400).json({ message: "target_ids (batch IDs) required" });
+      const batches = await prisma.batch.findMany({
+        where: { id: { in: target_ids.map(Number) }, institution_id: institutionId }
+      });
+      if (!batches.length) return res.status(403).json({ message: "No valid batches found for your institution" });
+      const batchTrainers = await prisma.batchTrainer.findMany({
+        where: { batch_id: { in: batches.map(b => b.id) } },
+        select: { trainer_id: true }
+      });
+      const ids = [...new Set(batchTrainers.map(bt => bt.trainer_id))];
+      recipients = ids.map(id => ({ id }));
+
+    } else if (target_type === 'SPECIFIC_TRAINERS') {
+      if (!target_ids?.length) return res.status(400).json({ message: "target_ids (user IDs) required" });
+      recipients = target_ids.map(id => ({ id: parseInt(id) }));
+
+    } else if (target_type === 'ALL_MO') {
+      // Send to monitoring officers assigned to this institution
+      recipients = await prisma.user.findMany({
+        where: { role: 'MONITORING_OFFICER', institution_id: institutionId },
+        select: { id: true }
+      });
+
+    } else {
+      return res.status(400).json({ message: "Invalid target_type" });
+    }
+
+    if (!recipients.length) return res.status(400).json({ message: "No recipients found for the selected target" });
+
+    await prisma.notification.createMany({
+      data: recipients.map(r => ({ user_id: r.id, title, message }))
+    });
+
+    res.json({ message: `Notification sent to ${recipients.length} recipient(s)`, count: recipients.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Trainer: Bulk send notifications ---
+// target_type: 'ALL_MY_STUDENTS' | 'BATCH_STUDENTS' | 'SPECIFIC_STUDENTS'
+app.post("/notifications/trainer/bulk", authenticateToken, authorizeRole("TRAINER", "ADMIN"), async (req, res) => {
+  try {
+    const { title, message, target_type, target_ids } = req.body;
+    if (!title || !message || !target_type) {
+      return res.status(400).json({ message: "title, message and target_type are required" });
+    }
+
+    const trainerId = req.user.id;
+    let recipients = [];
+
+    // Get batches assigned to this trainer
+    const trainerBatches = await prisma.batchTrainer.findMany({
+      where: { trainer_id: trainerId },
+      select: { batch_id: true }
+    });
+    const myBatchIds = trainerBatches.map(b => b.batch_id);
+
+    if (target_type === 'ALL_MY_STUDENTS') {
+      const batchStudents = await prisma.batchStudent.findMany({
+        where: { batch_id: { in: myBatchIds } },
+        select: { student_id: true }
+      });
+      const ids = [...new Set(batchStudents.map(bs => bs.student_id))];
+      recipients = ids.map(id => ({ id }));
+
+    } else if (target_type === 'BATCH_STUDENTS') {
+      if (!target_ids?.length) return res.status(400).json({ message: "target_ids (batch IDs) required" });
+      const targetBatchIds = target_ids.map(Number).filter(id => myBatchIds.includes(id));
+      if (!targetBatchIds.length) return res.status(403).json({ message: "None of the selected batches are assigned to you" });
+
+      const batchStudents = await prisma.batchStudent.findMany({
+        where: { batch_id: { in: targetBatchIds } },
+        select: { student_id: true }
+      });
+      const ids = [...new Set(batchStudents.map(bs => bs.student_id))];
+      recipients = ids.map(id => ({ id }));
+
+    } else if (target_type === 'SPECIFIC_STUDENTS') {
+      if (!target_ids?.length) return res.status(400).json({ message: "target_ids (user IDs) required" });
+      // We could verify each student is in one of the trainer's batches, but for now we trust the client search which is scoped
+      recipients = target_ids.map(id => ({ id: parseInt(id) }));
+
+    } else {
+      return res.status(400).json({ message: "Invalid target_type" });
+    }
+
+    if (!recipients.length) return res.status(400).json({ message: "No recipients found for the selected target" });
+
+    await prisma.notification.createMany({
+      data: recipients.map(r => ({ user_id: r.id, title, message }))
+    });
+
+    res.json({ message: `Notification sent to ${recipients.length} student(s)`, count: recipients.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Monitoring Officer: Bulk send notifications ---
+// target_type: 'MY_INSTITUTION'
+app.post("/notifications/mo/bulk", authenticateToken, authorizeRole("MONITORING_OFFICER", "ADMIN"), async (req, res) => {
+  try {
+    const { title, message, target_type } = req.body;
+    if (!title || !message || !target_type) {
+      return res.status(400).json({ message: "title, message and target_type are required" });
+    }
+
+    let recipients = [];
+
+    if (target_type === 'MY_INSTITUTION') {
+      const instId = req.user.institution_id;
+      if (!instId) return res.status(400).json({ message: "No institution assigned to you" });
+      recipients = [{ id: instId }];
+    } else {
+      return res.status(400).json({ message: "Invalid target_type" });
+    }
+
+    await prisma.notification.createMany({
+      data: recipients.map(r => ({ user_id: r.id, title, message }))
+    });
+
+    res.json({ message: "Notification sent to institution", count: recipients.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

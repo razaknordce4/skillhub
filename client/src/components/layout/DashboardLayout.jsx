@@ -35,14 +35,14 @@ export default function DashboardLayout({ children }) {
           { name: 'Sessions', path: '/dashboard/student/sessions', icon: BookOpen },
           { name: 'Trainers', path: '/dashboard/student/trainers', icon: Users },
           { name: 'Attendance', path: '/dashboard/student/attendance', icon: Calendar },
-          { name: 'Notifications', path: '/dashboard/student/notifications', icon: Activity }
+          { name: 'Notifications', path: '/dashboard/student/notifications', icon: Bell }
         ];
       case 'TRAINER':
         return [
           ...baseItems,
           { name: 'Batches', path: '/dashboard/trainer/batches', icon: Users },
           { name: 'Sessions', path: '/dashboard/trainer/sessions', icon: Calendar },
-          { name: 'Notifications', path: '/dashboard/trainer/notifications', icon: Activity }
+          { name: 'Notifications', path: '/dashboard/trainer/notifications', icon: Bell }
         ];
       case 'INSTITUTION':
         return [
@@ -60,7 +60,7 @@ export default function DashboardLayout({ children }) {
           { name: 'Trainers', path: '/dashboard/programme-manager/trainers', icon: Users },
           { name: 'Students', path: '/dashboard/programme-manager/students', icon: Users },
           { name: 'Monitoring Officers', path: '/dashboard/programme-manager/managers', icon: Users },
-          { name: 'Notifications', path: '/dashboard/programme-manager/notifications', icon: Activity }
+          { name: 'Notifications', path: '/dashboard/programme-manager/notifications', icon: Bell }
         ];
       case 'MONITORING_OFFICER':
         return [
@@ -68,7 +68,7 @@ export default function DashboardLayout({ children }) {
           { name: 'Institutions', path: '/dashboard/monitoring-officer/institutions', icon: BookOpen },
           { name: 'Trainers', path: '/dashboard/monitoring-officer/trainers', icon: Users },
           { name: 'Students', path: '/dashboard/monitoring-officer/students', icon: Users },
-          { name: 'Notifications', path: '/dashboard/monitoring-officer/notifications', icon: Activity }
+          { name: 'Notifications', path: '/dashboard/monitoring-officer/notifications', icon: Bell }
         ];
       case 'ADMIN':
         return [
@@ -77,7 +77,7 @@ export default function DashboardLayout({ children }) {
           { name: 'Trainers', path: '/dashboard/admin/trainers', icon: Users },
           { name: 'Students', path: '/dashboard/admin/students', icon: Users },
           { name: 'Officers', path: '/dashboard/admin/managers', icon: Users },
-          { name: 'Notifications', path: '/dashboard/admin/notifications', icon: Activity }
+          { name: 'Notifications', path: '/dashboard/admin/notifications', icon: Bell }
         ];
       default:
         return baseItems;
