@@ -4,13 +4,25 @@ import DataTable from '../../../components/ui/DataTable';
 import Toast from '../../../components/ui/Toast';
 import DeleteConfirmationModal from '../../../components/ui/DeleteConfirmationModal';
 import { AnimatePresence } from 'framer-motion';
-import { User, Pencil, Trash2 } from 'lucide-react';
+import { User, Pencil, Trash2, Calendar, Download, Activity, BookOpen, Users, TrendingUp, X, Plus } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+import { useData } from '../../../context/DataContext';
+import { useCallback } from 'react';
+import usePolling from '../../../hooks/usePolling';
 
 export default function PMTrainers({ isReadOnly = false }) {
   const { user } = useAuth();
-  const [trainers, setTrainers] = useState([]);
-  const [globalSummary, setGlobalSummary] = useState(null);
+  const { cache, fetchData, loadingStates, updateCache } = useData();
+  
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  
+  const trainers = cache['pm_trainers_list'] || [];
+  const globalSummary = cache['pm_global_summary'] || null;
+  const institutions = cache['pm_institutions_list_brief'] || [];
+
+  const loading = loadingStates['pm_trainers_list'] && trainers.length === 0;
+
   const [searchId, setSearchId] = useState('');
   const [searchName, setSearchName] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
@@ -18,6 +30,7 @@ export default function PMTrainers({ isReadOnly = false }) {
   const [editMode, setEditMode] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+  const [selectedTrainerAnalytics, setSelectedTrainerAnalytics] = useState(null);
 
   // New Trainer Form State
   const [newName, setNewName] = useState('');
@@ -36,38 +49,29 @@ export default function PMTrainers({ isReadOnly = false }) {
     setToast({ message, type });
   };
 
+  const fetchTrainers = useCallback((opts) => {
+    return fetchData('pm_trainers_list', '/users?role=TRAINER', opts);
+  }, [fetchData]);
+
+  const fetchGlobalSummary = useCallback((opts) => {
+    return fetchData('pm_global_summary', '/programme/summary', opts);
+  }, [fetchData]);
+
+  const fetchInstitutions = useCallback((opts) => {
+    return fetchData('pm_institutions_list_brief', '/users?role=INSTITUTION', opts);
+  }, [fetchData]);
+
   useEffect(() => {
     fetchTrainers();
     fetchGlobalSummary();
     fetchInstitutions();
   }, [user]);
 
-  const fetchInstitutions = async () => {
-    try {
-      const res = await axios.get('/users?role=INSTITUTION');
-      setInstitutions(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchGlobalSummary = async () => {
-    try {
-      const res = await axios.get('/programme/summary');
-      setGlobalSummary(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchTrainers = async () => {
-    try {
-      const res = await axios.get('/users?role=TRAINER');
-      setTrainers(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  usePolling(() => {
+    fetchTrainers({ forceRefresh: true, silent: true });
+    fetchGlobalSummary({ forceRefresh: true, silent: true });
+    fetchInstitutions({ forceRefresh: true, silent: true });
+  }, 30000);
 
   const handleEditClick = (item) => {
     setEditMode(true);
