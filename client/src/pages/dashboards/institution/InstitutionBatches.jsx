@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import DataTable from '../../../components/ui/DataTable';
-import { Plus, BookOpen, Users, Calendar, X, Activity } from 'lucide-react';
+import { Plus, BookOpen, Users, Calendar, X, Activity, Trash2 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import Toast from '../../../components/ui/Toast';
 import { motion } from 'framer-motion';
@@ -92,6 +92,20 @@ export default function InstitutionBatches() {
     }
   };
 
+  const handleRemoveTrainer = async (batchId, trainerId, trainerName) => {
+    if (!window.confirm(`Are you sure you want to remove ${trainerName} from this batch?`)) {
+      return;
+    }
+    
+    try {
+      await axios.delete(`/batches/${batchId}/trainers/${trainerId}`);
+      setToast({ type: 'success', message: 'Trainer removed successfully' });
+      fetchBatches();
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.message || 'Error removing trainer' });
+    }
+  };
+
   const toggleSelection = (id, type) => {
     if (type === 'trainer') {
       setSelectedTrainers(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -127,11 +141,22 @@ export default function InstitutionBatches() {
             {row.trainers?.slice(0, 3).map((t, i) => (
               <div 
                 key={i} 
-                className={`w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-[8px] font-bold text-white shadow-sm`}
-                style={{ backgroundColor: `hsl(${(t.trainer?.id * 137) % 360}, 60%, 50%)` }}
-                title={t.trainer?.name || 'Unknown Trainer'}
+                className="group relative flex items-center"
               >
-                {t.trainer?.name?.charAt(0) || '?'}
+                <div 
+                  className={`w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-[8px] font-bold text-white shadow-sm`}
+                  style={{ backgroundColor: `hsl(${(t.trainer?.id * 137) % 360}, 60%, 50%)` }}
+                  title={t.trainer?.name || 'Unknown Trainer'}
+                >
+                  {t.trainer?.name?.charAt(0) || '?'}
+                </div>
+                <button
+                  onClick={() => handleRemoveTrainer(row.id, t.trainer?.id, t.trainer?.name)}
+                  className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  title={`Remove ${t.trainer?.name}`}
+                >
+                  <X size={8} />
+                </button>
               </div>
             ))}
             {row.trainers?.length > 3 && (
@@ -240,39 +265,93 @@ export default function InstitutionBatches() {
       )}
 
       {/* Multi-Trainer Modal */}
-      {showTrainerModal && (
+      {showTrainerModal && selectedBatch && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h3 className="font-black text-gray-800">Assign Multiple Trainers</h3>
+              <div>
+                <h3 className="font-black text-gray-800">Manage Trainers</h3>
+                <p className="text-xs text-gray-500 mt-1">Batch: {selectedBatch.name}</p>
+              </div>
               <button onClick={() => setShowTrainerModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
             </div>
             <div className="p-6 space-y-4">
                <div className="max-h-60 overflow-y-auto space-y-2">
-                 {availableTrainers.map(t => (
-                   <div 
-                    key={t.id} 
-                    onClick={() => toggleSelection(t.id, 'trainer')}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${selectedTrainers.includes(t.id) ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}
-                   >
-                     <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold mr-3">{t.name.charAt(0)}</div>
-                        <div>
-                          <p className="text-sm font-bold text-gray-800">{t.name}</p>
-                          <p className="text-[10px] text-gray-400 font-mono">{t.displayId}</p>
-                        </div>
+                 {availableTrainers.map(t => {
+                   const isAssigned = selectedBatch.trainers?.some(trainer => trainer.trainer?.id === t.id);
+                   const isSelected = selectedTrainers.includes(t.id);
+                   
+                   return (
+                     <div 
+                      key={t.id} 
+                      className={`p-3 rounded-xl border transition-all flex items-center justify-between ${
+                        isAssigned 
+                          ? 'border-emerald-500 bg-emerald-50' 
+                          : isSelected 
+                            ? 'border-blue-500 bg-blue-50' 
+                            : 'border-gray-100 hover:border-gray-200'
+                      }`}
+                     >
+                       <div className="flex items-center flex-1">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold mr-3 ${
+                            isAssigned 
+                              ? 'bg-emerald-100 text-emerald-600' 
+                              : 'bg-blue-100 text-blue-600'
+                          }`}>
+                            {t.name.charAt(0)}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center">
+                              <p className="text-sm font-bold text-gray-800">{t.name}</p>
+                              {isAssigned && (
+                                <span className="ml-2 px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded-full">Assigned</span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-gray-400 font-mono">{t.displayId}</p>
+                          </div>
+                       </div>
+                       <div className="flex items-center space-x-2">
+                         {isAssigned ? (
+                           <button
+                             onClick={() => handleRemoveTrainer(selectedBatch.id, t.id, t.name)}
+                             className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                             title={`Remove ${t.name} from batch`}
+                           >
+                             <Trash2 size={14} />
+                           </button>
+                         ) : (
+                           <button
+                             onClick={() => toggleSelection(t.id, 'trainer')}
+                             className={`p-2 rounded-lg transition-colors ${
+                               isSelected 
+                                 ? 'bg-blue-500 text-white' 
+                                 : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                             }`}
+                             title={isSelected ? 'Deselect trainer' : 'Select trainer'}
+                           >
+                             <Plus size={14} />
+                           </button>
+                         )}
+                       </div>
                      </div>
-                     {selectedTrainers.includes(t.id) && <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center text-white"><Plus size={12} className="rotate-45" /></div>}
-                   </div>
-                 ))}
+                   );
+                 })}
                </div>
-               <button 
-                onClick={handleBulkTrainers}
-                className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all disabled:opacity-50"
-                disabled={selectedTrainers.length === 0}
-               >
-                 Assign {selectedTrainers.length} Trainers
-               </button>
+               <div className="flex space-x-3">
+                 <button 
+                  onClick={() => setShowTrainerModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl hover:bg-gray-300 transition-all"
+                 >
+                   Cancel
+                 </button>
+                 <button 
+                  onClick={handleBulkTrainers}
+                  className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all disabled:opacity-50"
+                  disabled={selectedTrainers.length === 0}
+                 >
+                   Assign {selectedTrainers.length} Trainer{selectedTrainers.length !== 1 ? 's' : ''}
+                 </button>
+               </div>
             </div>
           </div>
         </div>

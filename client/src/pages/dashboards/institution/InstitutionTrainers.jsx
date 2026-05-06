@@ -29,7 +29,7 @@ export default function InstitutionTrainers() {
     setLoading(true);
     try {
       const [tRes, bRes] = await Promise.all([
-        axios.get('/users?role=TRAINER'),
+        axios.get('/users?role=TRAINER&include=subjects'),
         axios.get('/batches')
       ]);
       setTrainers(tRes.data);

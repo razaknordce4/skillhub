@@ -13,7 +13,7 @@ async function main() {
 
   try {
     const password = await bcrypt.hash(plainPassword, 10);
-    
+
     // Generate Display ID
     const count = await prisma.user.count({ where: { role: 'PROGRAMME_MANAGER' } });
     const nextNumber = (count + 1).toString().padStart(3, '0');
@@ -25,16 +25,16 @@ async function main() {
         password,
         name,
       },
-      create: { 
-        email, 
-        password, 
-        name, 
-        role: 'PROGRAMME_MANAGER', 
-        displayId 
+      create: {
+        email,
+        password,
+        name,
+        role: 'PROGRAMME_MANAGER',
+        displayId
       }
     });
 
-    console.log('✅ Programme Manager created successfully!');
+    console.log('  Programme Manager created successfully!');
     console.log('-----------------------------------');
     console.log(`Email:    ${pm.email}`);
     console.log(`Password: ${plainPassword}`);

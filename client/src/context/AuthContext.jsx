@@ -33,9 +33,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (name, email, password, role = 'STUDENT') => {
+  const register = async (name, email, password, role = 'STUDENT', institution_id = null, institution_name = null) => {
     try {
-      const res = await axios.post('/auth/signup', { name, email, password, role });
+      const res = await axios.post('/auth/signup', { name, email, password, role, institution_id, institution_name });
       const { token, user } = res.data;
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));

@@ -1,21 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { 
   BookOpen, Trophy, Award, Flame, Calendar, Users, Clock,
   MoreHorizontal, ChevronDown, ChevronLeft, ChevronRight,
-  Edit3, Plus, CheckCircle, User, TrendingUp, Activity
+  Edit3, Plus, CheckCircle, User, TrendingUp, Activity,
+  ExternalLink, Lock, Video
 } from 'lucide-react';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [attendanceStats, setAttendanceStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState([]);
   const [todos, setTodos] = useState([]);
   const [showAddTodo, setShowAddTodo] = useState(false);
   const [newTodo, setNewTodo] = useState({ title: '', description: '', due_date: '', auto_delete: false });
-  
+  const [joiningId, setJoiningId] = useState(null);
+
+  // --- Session status helpers ---
+  const parseTimeMins = (t) => {
+    if (!t) return 0;
+    const m = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!m) return 0;
+    let h = parseInt(m[1]), min = parseInt(m[2]);
+    if (m[3]) {
+      if (m[3].toUpperCase() === 'PM' && h !== 12) h += 12;
+      if (m[3].toUpperCase() === 'AM' && h === 12) h = 0;
+    }
+    return h * 60 + min;
+  };
+
+  const getStatus = (session) => {
+    const now = new Date();
+    const sDate = new Date(session.date);
+    const sameDay = sDate.toDateString() === now.toDateString();
+    if (!sameDay) return sDate > now ? 'upcoming' : 'completed';
+    const nowM = now.getHours() * 60 + now.getMinutes();
+    const start = parseTimeMins(session.start_time);
+    const end = parseTimeMins(session.end_time);
+    if (nowM < start) return 'upcoming';
+    if (nowM > end) return 'completed';
+    return 'ongoing';
+  };
+
+  const isLinkActive = (session) => {
+    const now = new Date();
+    const sDate = new Date(session.date);
+    if (sDate.toDateString() !== now.toDateString()) return false;
+    const nowM = now.getHours() * 60 + now.getMinutes();
+    const start = parseTimeMins(session.start_time);
+    const end = parseTimeMins(session.end_time);
+    return nowM >= start - 10 && nowM <= end;
+  };
+  // --- End helpers ---
+
   useEffect(() => {
     fetchAttendanceStats();
     fetchSessions();
@@ -51,15 +92,17 @@ export default function StudentDashboard() {
     }
   };
 
-  const markAttendance = async (sessionId) => {
+  // Join session — records join, opens meeting link, attendance auto-marked when session ends
+  const handleJoin = async (session) => {
+    setJoiningId(session.id);
     try {
-      await axios.post('/api/attendance/mark', { session_id: sessionId, status: 'PRESENT' });
-      alert('Attendance marked successfully!');
-      fetchAttendanceStats();
+      const res = await axios.post(`/sessions/${session.id}/join`);
+      window.open(res.data.meeting_link, '_blank', 'noopener');
       fetchSessions();
     } catch (err) {
-      alert(err.response?.data?.message || 'Error marking attendance');
+      alert(err.response?.data?.message || 'Could not join session');
     }
+    setJoiningId(null);
   };
 
   const toggleTodo = async (id) => {
@@ -186,36 +229,40 @@ export default function StudentDashboard() {
           
           <div className="space-y-4">
             {attendanceStats?.recent_sessions?.length > 0 ? (
-              attendanceStats.recent_sessions.map((session) => (
-                <div key={session.id} className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50">
-                  <div className="flex items-center space-x-4">
-                    <div className="bg-blue-50 p-2 rounded-full">
-                      <BookOpen className="w-5 h-5 text-blue-600" />
+              attendanceStats.recent_sessions.map((session) => {
+                const status = getStatus(session);
+                return (
+                  <div key={session.id} className="flex items-center justify-between p-4 border border-gray-100 rounded-lg hover:bg-gray-50">
+                    <div className="flex items-center space-x-4">
+                      <div className="bg-blue-50 p-2 rounded-full">
+                        <BookOpen className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-blue-500 font-bold mb-1">{session.batch_name}</p>
+                        <h4 className="font-medium text-gray-900">{session.title}</h4>
+                        <p className="text-sm text-gray-500">
+                          {new Date(session.date).toLocaleDateString()} at {session.start_time}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-blue-500 font-bold mb-1">{session.batch_name}</p>
-                      <h4 className="font-medium text-gray-900">{session.title}</h4>
-                      <p className="text-sm text-gray-500">
-                        {new Date(session.date).toLocaleDateString()} at {session.start_time}
-                      </p>
+                    <div className="flex items-center space-x-2">
+                      {session.attended ? (
+                        <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> Attended
+                        </span>
+                      ) : status === 'upcoming' ? (
+                        <span className="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-medium">
+                          Upcoming
+                        </span>
+                      ) : status === 'completed' ? (
+                        <span className="px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium flex items-center gap-1">
+                          <Lock className="w-3 h-3" /> Ended
+                        </span>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    {session.attended ? (
-                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                        Attended
-                      </span>
-                    ) : (
-                      <button 
-                        onClick={() => markAttendance(session.id)}
-                        className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm hover:bg-blue-700 flex items-center"
-                      >
-                        <CheckCircle className="w-3 h-3 mr-1" /> Mark
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="text-center py-8">
                 <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-2" />
@@ -302,39 +349,71 @@ export default function StudentDashboard() {
           </div>
         </div>
 
-        {/* Live Class (Sessions) */}
         <div className="col-span-1 bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-gray-900 text-lg">Live class</h3>
-            <span className="flex items-center text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
-              <Clock className="w-3 h-3 mr-1" /> 01pm - 02pm
-            </span>
+            <h3 className="font-bold text-gray-900 text-lg">Today's Classes</h3>
           </div>
           
-          <div className="flex-1 flex flex-col justify-center items-center py-4">
-            {sessions.length > 0 ? (
-               <div className="w-full space-y-4">
-                 {sessions.slice(0,1).map(session => (
-                    <div key={session.id} className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex justify-between items-center">
+          <div className="flex-1 flex flex-col gap-3">
+            {sessions.filter(s => {
+              const d = new Date(s.date);
+              return d.toDateString() === new Date().toDateString();
+            }).length > 0 ? (
+              sessions
+                .filter(s => new Date(s.date).toDateString() === new Date().toDateString())
+                .map(session => {
+                  const status = getStatus(session);
+                  const canJoin = session.meeting_link && isLinkActive(session) && !session.myJoin;
+                  return (
+                    <div key={session.id} className={`p-4 rounded-xl border flex justify-between items-center
+                      ${status === 'ongoing' ? 'bg-emerald-50 border-emerald-100' : status === 'completed' ? 'bg-gray-50 border-gray-100' : 'bg-blue-50 border-blue-100'}`}>
                       <div>
-                        <p className="text-xs text-blue-500 font-bold mb-1">{session.batch.name}</p>
-                        <h4 className="font-medium text-gray-900">{session.title}</h4>
+                        <p className="text-xs font-bold mb-1
+                          ${status === 'ongoing' ? 'text-emerald-500' : status === 'completed' ? 'text-gray-400' : 'text-blue-500'}">
+                          {session.batch?.name}
+                        </p>
+                        <h4 className="font-medium text-gray-900 text-sm">{session.title}</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">{session.start_time} – {session.end_time}</p>
                       </div>
-                      <button onClick={() => markAttendance(session.id)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm hover:bg-blue-700 flex items-center">
-                        <CheckCircle className="w-3 h-3 mr-1" /> Mark
-                      </button>
+                      <div>
+                        {status === 'completed' ? (
+                          <span className="flex items-center gap-1 text-xs text-gray-400 font-semibold bg-white px-2 py-1 rounded-lg border border-gray-200">
+                            <Lock className="w-3 h-3" /> Ended
+                          </span>
+                        ) : status === 'upcoming' ? (
+                          <span className="flex items-center gap-1 text-xs text-sky-600 font-semibold bg-white px-2 py-1 rounded-lg border border-sky-100">
+                            <Clock className="w-3 h-3" /> Upcoming
+                          </span>
+                        ) : canJoin ? (
+                          <button
+                            onClick={() => handleJoin(session)}
+                            disabled={joiningId === session.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md shadow-emerald-200 disabled:opacity-60"
+                          >
+                            {joiningId === session.id
+                              ? <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              : <ExternalLink className="w-3 h-3" />}
+                            Click to Join
+                          </button>
+                        ) : session.myJoin ? (
+                          <span className="flex items-center gap-1 text-xs text-blue-600 font-semibold bg-white px-2 py-1 rounded-lg border border-blue-100">
+                            <CheckCircle className="w-3 h-3" /> Joined
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-emerald-600 font-semibold bg-white px-2 py-1 rounded-lg border border-emerald-100 animate-pulse">
+                            <Video className="w-3 h-3" /> Live
+                          </span>
+                        )}
+                      </div>
                     </div>
-                 ))}
-               </div>
+                  );
+                })
             ) : (
               <div className="text-center p-6 bg-gray-50 rounded-xl border border-dashed border-gray-200 w-full">
                 <BookOpen className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No live classes today</p>
+                <p className="text-sm text-gray-500">No classes today</p>
               </div>
             )}
-          </div>
-          <div className="mt-auto">
-             <p className="text-xs text-gray-500"><span className="font-semibold text-gray-700">Class:</span> Higher Math part -2 solution</p>
           </div>
         </div>
 

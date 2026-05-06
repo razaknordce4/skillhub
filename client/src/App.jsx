@@ -20,6 +20,7 @@ import StudentDashboard from './pages/dashboards/StudentDashboard';
 import TrainerDashboard from './pages/dashboards/TrainerDashboard';
 import InstitutionDashboard from './pages/dashboards/InstitutionDashboard';
 import ProgrammeManagerDashboard from './pages/dashboards/ProgrammeManagerDashboard';
+import ProgrammeManagerInstitutions from './pages/dashboards/ProgrammeManagerInstitutions';
 import MonitoringOfficerDashboard from './pages/dashboards/MonitoringOfficerDashboard';
 import AdminDashboard from './pages/dashboards/AdminDashboard';
 
@@ -147,6 +148,9 @@ const AppRoutes = () => {
       <Route path="/dashboard/institution/batches" element={
         <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><InstitutionBatches /></DashboardLayout></ProtectedRoute>
       } />
+      <Route path="/dashboard/institution/students" element={
+        <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><PMStudents isReadOnly={true} /></DashboardLayout></ProtectedRoute>
+      } />
       <Route path="/dashboard/institution/trainers" element={
         <ProtectedRoute allowedRoles={['INSTITUTION']}><DashboardLayout><InstitutionTrainers /></DashboardLayout></ProtectedRoute>
       } />
@@ -162,7 +166,7 @@ const AppRoutes = () => {
         <ProtectedRoute allowedRoles={['PROGRAMME_MANAGER']}><DashboardLayout><ProgrammeManagerDashboard /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/programme-manager/institutions" element={
-        <ProtectedRoute allowedRoles={['PROGRAMME_MANAGER']}><DashboardLayout><PMInstitutions /></DashboardLayout></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['PROGRAMME_MANAGER']}><DashboardLayout><ProgrammeManagerInstitutions /></DashboardLayout></ProtectedRoute>
       } />
       <Route path="/dashboard/programme-manager/trainers" element={
         <ProtectedRoute allowedRoles={['PROGRAMME_MANAGER']}><DashboardLayout><PMTrainers /></DashboardLayout></ProtectedRoute>

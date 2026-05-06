@@ -55,28 +55,28 @@ const minutesUntilActive = (session) => {
 const fmt = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
 const STATUS_STYLES = {
-  upcoming:  { badge: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500',           label: 'Upcoming' },
-  ongoing:   { badge: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500 animate-pulse', label: 'Live Now' },
-  completed: { badge: 'bg-gray-100 text-gray-500',   dot: 'bg-gray-400',           label: 'Completed' },
+  upcoming: { badge: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500', label: 'Upcoming' },
+  ongoing: { badge: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500 animate-pulse', label: 'Live Now' },
+  completed: { badge: 'bg-gray-100 text-gray-500', dot: 'bg-gray-400', label: 'Completed' },
 };
 
 const ATT_STYLES = {
   PRESENT: { label: 'Present', icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50' },
-  ABSENT:  { label: 'Absent',  icon: XCircle,     color: 'text-red-500 bg-red-50' },
-  LATE:    { label: 'Late',    icon: AlertCircle,  color: 'text-amber-600 bg-amber-50' },
-  JOINED:  { label: 'Joined',  icon: CheckCircle, color: 'text-blue-600 bg-blue-50' },
+  ABSENT: { label: 'Absent', icon: XCircle, color: 'text-red-500 bg-red-50' },
+  LATE: { label: 'Late', icon: AlertCircle, color: 'text-amber-600 bg-amber-50' },
+  JOINED: { label: 'Joined', icon: CheckCircle, color: 'text-blue-600 bg-blue-50' },
 };
 
 export default function StudentSessions() {
   const { user } = useAuth();
-  const [sessions, setSessions]   = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [joining, setJoining]     = useState(null);
-  const [toast, setToast]         = useState(null);
-  const [search, setSearch]       = useState('');
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [joining, setJoining] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [activeTab, setActiveTab] = useState('all');
-  const [tick, setTick]           = useState(0); // refresh every minute for link availability
+  const [tick, setTick] = useState(0); // refresh every minute for link availability
 
   // Real-time updates - poll every 30 seconds
   useEffect(() => {
@@ -108,7 +108,7 @@ export default function StudentSessions() {
     setJoining(session.id);
     try {
       const res = await axios.post(`/sessions/${session.id}/join`);
-      showToast('✅ Session joined! Attendance will be marked after session ends.');
+      showToast('  Session joined! Attendance will be marked after session ends.');
       // Refresh sessions to update join status
       fetchSessions();
       // Open link in new tab
@@ -121,7 +121,7 @@ export default function StudentSessions() {
 
   // Attendance stats
   const totalSessions = sessions.length;
-  const presentCount  = sessions.filter(s => s.myAttendance?.status === 'PRESENT').length;
+  const presentCount = sessions.filter(s => s.myAttendance?.status === 'PRESENT').length;
   const attendanceRate = totalSessions > 0 ? Math.round((presentCount / totalSessions) * 100) : 0;
   const counts = { upcoming: 0, ongoing: 0, completed: 0 };
   sessions.forEach(s => { counts[getSessionStatus(s)]++; });
@@ -144,7 +144,7 @@ export default function StudentSessions() {
       {toast && (
         <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl text-white text-sm font-bold transition-all
           ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'}`}>
-          {toast.type === 'success' ? <CheckCircle size={18}/> : <AlertCircle size={18}/>}
+          {toast.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
           {toast.message}
         </div>
       )}
@@ -178,7 +178,7 @@ export default function StudentSessions() {
           <div className="flex justify-between mt-2 text-[10px] text-blue-200 font-bold">
             <span>0%</span>
             <span className={attendanceRate >= 75 ? 'text-emerald-300' : 'text-amber-300'}>
-              {attendanceRate >= 75 ? '✅ Good standing' : '⚠️ Below 75% — improve attendance'}
+              {attendanceRate >= 75 ? '  Good standing' : '  Below 75% — improve attendance'}
             </span>
             <span>100%</span>
           </div>
@@ -189,7 +189,7 @@ export default function StudentSessions() {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: 'Upcoming', value: counts.upcoming, color: 'bg-sky-50 text-sky-700 border-sky-100', tab: 'upcoming' },
-          { label: 'Live Now', value: counts.ongoing,  color: 'bg-emerald-50 text-emerald-700 border-emerald-100', tab: 'ongoing' },
+          { label: 'Live Now', value: counts.ongoing, color: 'bg-emerald-50 text-emerald-700 border-emerald-100', tab: 'ongoing' },
           { label: 'Completed', value: counts.completed, color: 'bg-gray-50 text-gray-600 border-gray-100', tab: 'completed' },
         ].map((s, i) => (
           <button
@@ -206,7 +206,7 @@ export default function StudentSessions() {
       {/* Filters */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap gap-3 items-center">
         <div className="flex items-center gap-2 flex-1 min-w-[180px] border border-gray-200 rounded-xl px-3 py-2">
-          <Search size={14} className="text-gray-400"/>
+          <Search size={14} className="text-gray-400" />
           <input
             type="text"
             placeholder="Search sessions or batches…"
@@ -226,7 +226,7 @@ export default function StudentSessions() {
             <option value="ongoing">Live Now</option>
             <option value="completed">Completed</option>
           </select>
-          <ChevronDown size={12} className="absolute right-2 top-3 text-gray-400 pointer-events-none"/>
+          <ChevronDown size={12} className="absolute right-2 top-3 text-gray-400 pointer-events-none" />
         </div>
       </div>
 
@@ -252,19 +252,19 @@ export default function StudentSessions() {
                 <tr>
                   <td colSpan={7} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-2 text-gray-400">
-                      <Calendar size={40} className="opacity-20"/>
+                      <Calendar size={40} className="opacity-20" />
                       <p className="font-bold text-sm">No sessions found</p>
                     </div>
                   </td>
                 </tr>
               ) : filtered.map(session => {
-                const status   = getSessionStatus(session);
-                const st       = STATUS_STYLES[status];
-                const att      = session.myAttendance;
+                const status = getSessionStatus(session);
+                const st = STATUS_STYLES[status];
+                const att = session.myAttendance;
                 const attStyle = att ? ATT_STYLES[att.status] : null;
                 const linkActive = session.meeting_link && isLinkActive(session);
-                const minsLeft   = session.meeting_link ? minutesUntilActive(session) : null;
-                const AttIcon    = attStyle?.icon;
+                const minsLeft = session.meeting_link ? minutesUntilActive(session) : null;
+                const AttIcon = attStyle?.icon;
 
                 return (
                   <tr key={session.id} className="hover:bg-gray-50/60 transition-colors">
@@ -272,13 +272,13 @@ export default function StudentSessions() {
                       <div className="flex items-center gap-3">
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
                           ${status === 'ongoing' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-                          {session.meeting_link ? <Video size={16}/> : <BookOpen size={16}/>}
+                          {session.meeting_link ? <Video size={16} /> : <BookOpen size={16} />}
                         </div>
                         <div>
                           <p className="font-bold text-gray-800">{session.title}</p>
                           {session.meeting_link && (
                             <p className="text-[10px] text-indigo-500 font-bold flex items-center gap-1 mt-0.5">
-                              <Video size={9}/> Virtual Session
+                              <Video size={9} /> Virtual Session
                             </p>
                           )}
                         </div>
@@ -291,31 +291,31 @@ export default function StudentSessions() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-1.5 text-gray-600 text-xs font-semibold">
-                        <Calendar size={13} className="text-gray-400"/>
+                        <Calendar size={13} className="text-gray-400" />
                         {fmt(session.date)}
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-1.5 text-gray-600 text-xs font-semibold">
-                        <Clock size={13} className="text-gray-400"/>
+                        <Clock size={13} className="text-gray-400" />
                         {session.start_time} – {session.end_time}
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${st.badge}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`}/>
+                        <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
                         {st.label}
                       </span>
                     </td>
                     <td className="px-4 py-4">
                       {att ? (
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${attStyle.color}`}>
-                          <AttIcon size={12}/>
+                          <AttIcon size={12} />
                           {attStyle.label}
                         </span>
                       ) : session.myJoin ? (
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${ATT_STYLES.JOINED.color}`}>
-                          <CheckCircle size={12}/>
+                          <CheckCircle size={12} />
                           {ATT_STYLES.JOINED.label}
                         </span>
                       ) : (
@@ -334,23 +334,23 @@ export default function StudentSessions() {
                               title="Join session — attendance will be marked"
                             >
                               {joining === session.id ? (
-                                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                               ) : (
-                                <ExternalLink size={12}/>
+                                <ExternalLink size={12} />
                               )}
                               Join Now
                             </button>
                           ) : status === 'completed' ? (
                             <span className="flex items-center gap-1 text-xs text-gray-400 font-semibold">
-                              <Lock size={11}/> Ended
+                              <Lock size={11} /> Ended
                             </span>
                           ) : isSameDay(new Date(), new Date(session.date)) && minsLeft !== null ? (
                             <span className="flex items-center gap-1 text-xs text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
-                              <Clock size={11}/> Opens in {minsLeft}m
+                              <Clock size={11} /> Opens in {minsLeft}m
                             </span>
                           ) : (
                             <span className="flex items-center gap-1 text-xs text-gray-400 font-semibold">
-                              <Lock size={11}/> Link available on session day
+                              <Lock size={11} /> Link available on session day
                             </span>
                           )
                         )}

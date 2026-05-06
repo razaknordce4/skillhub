@@ -6,9 +6,9 @@ Let’s make it super clear 👇
 
 They will get:
 
-✅ Source code (client + server)
-✅ docker-compose.yml
-✅ package.json files
+  Source code (client + server)
+  docker-compose.yml
+  package.json files
 ❌ NO .env files
 ❌ NO node_modules
 ❌ NO build files
@@ -47,7 +47,7 @@ Then teammate just copies:
 
 cp .env.example .env
 🐳 3. Run the project
-✅ Recommended (Docker way)
+  Recommended (Docker way)
 docker-compose up --build
 
 👉 This will:

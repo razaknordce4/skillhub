@@ -48,6 +48,7 @@ export default function DashboardLayout({ children }) {
         return [
           ...baseItems,
           { name: 'Batches', path: '/dashboard/institution/batches', icon: BookOpen },
+          { name: 'Students', path: '/dashboard/institution/students', icon: Users },
           { name: 'Trainers', path: '/dashboard/institution/trainers', icon: Users },
           { name: 'Attendance', path: '/dashboard/institution/attendance', icon: Activity },
           { name: 'Notifications', path: '/dashboard/institution/notifications', icon: Bell }

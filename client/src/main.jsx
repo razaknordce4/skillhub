@@ -6,6 +6,13 @@ import './index.css';
 
 axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+axios.interceptors.request.use((config) => {
+  if (config.url && config.url.startsWith('/api')) {
+    config.url = config.url.replace('/api', '');
+  }
+  return config;
+});
+
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

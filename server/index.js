@@ -25,15 +25,25 @@ const generateDisplayId = async (type, role) => {
 
   const prefix = type === 'BATCH' ? 'BTSB-' : (prefixMap[role] || 'USSB-');
   
-  let count;
-  if (type === 'BATCH') {
-    count = await prisma.batch.count();
-  } else {
-    count = await prisma.user.count({ where: { role } });
+  // Find the highest existing number for this prefix
+  let existingId;
+  let nextNumber = 1;
+  
+  while (true) {
+    const candidateId = `${prefix}${nextNumber.toString().padStart(3, '0')}`;
+    
+    if (type === 'BATCH') {
+      existingId = await prisma.batch.findUnique({ where: { displayId: candidateId } });
+    } else {
+      existingId = await prisma.user.findUnique({ where: { displayId: candidateId } });
+    }
+    
+    if (!existingId) {
+      return candidateId;
+    }
+    
+    nextNumber++;
   }
-
-  const nextNumber = (count + 1).toString().padStart(3, '0');
-  return `${prefix}${nextNumber}`;
 };
 
 app.use(cors());
@@ -95,7 +105,7 @@ app.post("/seed", async (req, res) => {
 // --- Auth Endpoints ---
 app.post("/auth/signup", async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, institution_id, institution_name } = req.body;
     
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) return res.status(400).json({ message: "User already exists" });
@@ -104,6 +114,38 @@ app.post("/auth/signup", async (req, res) => {
     const userRole = role || "STUDENT";
     const displayId = await generateDisplayId('USER', userRole);
     
+    let finalInstitutionId = institution_id ? parseInt(institution_id) : null;
+    
+    // If institution_name is provided, create new institution first
+    if (institution_name && !finalInstitutionId) {
+      try {
+        const institutionDisplayId = await generateDisplayId('USER', 'INSTITUTION');
+        const institutionEmail = `${institution_name.toLowerCase().replace(/\s+/g, '_')}@skillbridge.com`;
+        const institutionPassword = await bcrypt.hash('temp123', 10);
+        
+        console.log('Creating institution:', { institution_name, institutionEmail, institutionDisplayId });
+        
+        const institution = await prisma.user.create({
+          data: {
+            name: institution_name,
+            email: institutionEmail,
+            password: institutionPassword,
+            role: 'INSTITUTION',
+            displayId: institutionDisplayId,
+            createdByStudent: true,
+            hasCredentials: false,
+            tempPassword: 'temp123'
+          }
+        });
+        
+        console.log('Institution created successfully:', institution.id);
+        finalInstitutionId = institution.id;
+      } catch (institutionError) {
+        console.error('Error creating institution:', institutionError);
+        return res.status(500).json({ error: 'Failed to create institution: ' + institutionError.message });
+      }
+    }
+    
     const user = await prisma.user.create({
       data: {
         name,
@@ -111,7 +153,7 @@ app.post("/auth/signup", async (req, res) => {
         password: hashedPassword,
         role: userRole,
         displayId,
-        institution_id: null
+        institution_id: finalInstitutionId
       }
     });
 
@@ -127,16 +169,25 @@ app.post("/auth/login", async (req, res) => {
     const { email, password } = req.body;
     
     const user = await prisma.user.findUnique({ 
-      where: { email },
-      include: { institution: { select: { name: true } } }
+      where: { email }
     });
     if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(400).json({ message: "Invalid credentials" });
 
+    // Get institution name separately if needed
+    let institutionName = null;
+    if (user.institution_id) {
+      const institution = await prisma.user.findUnique({
+        where: { id: user.institution_id },
+        select: { name: true }
+      });
+      institutionName = institution?.name || null;
+    }
+
     const token = jwt.sign({ id: user.id, role: user.role, email: user.email, institution_id: user.institution_id, displayId: user.displayId }, JWT_SECRET, { expiresIn: "7d" });
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, institution_id: user.institution_id, displayId: user.displayId, institution_name: user.institution?.name || null } });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role, institution_id: user.institution_id, displayId: user.displayId, institution_name: institutionName } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -280,6 +331,53 @@ app.get("/users/:id", authenticateToken, async (req, res) => {
   }
 });
 
+app.put("/users/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, password, hasCredentials, tempPassword } = req.body;
+    
+    // Verify user exists and is an institution
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    if (user.role !== 'INSTITUTION') {
+      return res.status(403).json({ message: "Only institutions can update credentials" });
+    }
+    
+    const updateData = {};
+    if (email) updateData.email = email;
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+    if (hasCredentials !== undefined) updateData.hasCredentials = hasCredentials;
+    if (tempPassword !== undefined) updateData.tempPassword = tempPassword;
+    
+    const updatedUser = await prisma.user.update({
+      where: { id: parseInt(id) },
+      data: updateData
+    });
+    
+    res.json({
+      message: "Institution credentials updated successfully",
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        displayId: updatedUser.displayId,
+        hasCredentials: updatedUser.hasCredentials
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/users", authenticateToken, async (req, res) => {
   try {
     const { role, institution_id } = req.query;
@@ -339,6 +437,7 @@ app.get("/users", authenticateToken, async (req, res) => {
       
     // Include trainer subjects if requested or if role is TRAINER
     if (req.query.include === 'subjects' || role === 'TRAINER') {
+      // Subject is already included in the main user select
     }
       
     const users = await prisma.user.findMany({
@@ -360,8 +459,8 @@ app.get("/users", authenticateToken, async (req, res) => {
         institution_name: u.institution?.name || null,
         batch: batchName,
         attendance_rate: 0,
-        studentBatches: undefined,
-        trainerBatches: undefined
+        studentBatches: u.studentBatches,
+        trainerBatches: u.trainerBatches
       };
     });
 
@@ -514,6 +613,27 @@ app.post("/batches/:id/assign-trainer", authenticateToken, authorizeRole("INSTIT
       create: { batch_id: parseInt(id), trainer_id: parseInt(trainer_id) }
     });
     res.json(assignment);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/batches/:id/trainers/:trainerId", authenticateToken, authorizeRole("INSTITUTION", "ADMIN"), async (req, res) => {
+  try {
+    const { id, trainerId } = req.params;
+    
+    const deleted = await prisma.batchTrainer.deleteMany({
+      where: { 
+        batch_id: parseInt(id),
+        trainer_id: parseInt(trainerId)
+      }
+    });
+    
+    if (deleted.count === 0) {
+      return res.status(404).json({ message: "Trainer assignment not found" });
+    }
+    
+    res.json({ message: "Trainer removed from batch successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -734,16 +854,47 @@ app.get("/sessions", authenticateToken, async (req, res) => {
         include: { batch: true },
         orderBy: { date: 'asc' }
       });
+
+      // --- Lazy auto-mark attendance for completed sessions ---
+      const now = new Date();
+      for (const s of rawSessions) {
+        const sDate = new Date(s.date);
+        const isSameDay = sDate.toDateString() === now.toDateString();
+        const endMins = parseTimeToMinutes(s.end_time);
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const isCompleted = sDate < now && !isSameDay || (isSameDay && nowMins > endMins);
+
+        if (isCompleted) {
+          // Find unprocessed join records for this student
+          const pendingJoin = await prisma.sessionJoin.findUnique({
+            where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } }
+          });
+          if (pendingJoin && !pendingJoin.marked) {
+            // Auto-mark PRESENT
+            await prisma.attendance.upsert({
+              where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } },
+              update: { status: 'PRESENT' },
+              create: { session_id: s.id, student_id: req.user.id, status: 'PRESENT' }
+            });
+            // Mark join as processed
+            await prisma.sessionJoin.update({
+              where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } },
+              data: { marked: true }
+            });
+          }
+        }
+      }
+      // --- End auto-mark ---
+
       // Attach each student's own attendance and join records
       sessions = await Promise.all(rawSessions.map(async s => {
         const att = await prisma.attendance.findUnique({
           where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } }
         });
-        // Temporarily commented out until SessionJoin table is created via migration
-        // const join = await prisma.sessionJoin.findUnique({
-        //   where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } }
-        // });
-        return { ...s, myAttendance: att || null, myJoin: null };
+        const join = await prisma.sessionJoin.findUnique({
+          where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } }
+        });
+        return { ...s, myAttendance: att || null, myJoin: join || null };
       }));
     } else if (req.user.role === "TRAINER") {
       sessions = await prisma.session.findMany({ where: { trainer_id: req.user.id }, include: { batch: true, _count: { select: { attendance: true } } }, orderBy: { date: 'desc' } });
@@ -843,24 +994,28 @@ app.post("/sessions/:id/join", authenticateToken, authorizeRole("STUDENT"), asyn
       return res.status(400).json({ message: "This session has already ended" });
     }
 
-    // Track session join attempt
-    // Temporarily commented out until SessionJoin table is created via migration
-    // await prisma.sessionJoin.upsert({
-    //   where: { session_id_student_id: { session_id: sessionId, student_id: req.user.id } },
-    //   update: { joined_at: new Date() },
-    //   create: { session_id: sessionId, student_id: req.user.id }
-    // });
-
-    // Send notification to student confirming join
-    await prisma.notification.create({
-      data: {
-        user_id: req.user.id,
-        title: "Session Joined 📱",
-        message: `You joined "${session.title}". Attendance will be marked after the session ends.`
-      }
+    // Record join attempt in SessionJoin table
+    await prisma.sessionJoin.upsert({
+      where: { session_id_student_id: { session_id: sessionId, student_id: req.user.id } },
+      update: { joined_at: new Date() },
+      create: { session_id: sessionId, student_id: req.user.id, marked: false }
     });
 
-    res.json({ meeting_link: session.meeting_link, message: "Joining session... Attendance will be marked after session ends." });
+    // Send notification to student confirming join
+    const existingNotif = await prisma.notification.findFirst({
+      where: { user_id: req.user.id, title: "Session Joined" }
+    });
+    if (!existingNotif) {
+      await prisma.notification.create({
+        data: {
+          user_id: req.user.id,
+          title: "Session Joined",
+          message: `You joined "${session.title}". Your attendance will be marked automatically after the session ends.`
+        }
+      });
+    }
+
+    res.json({ meeting_link: session.meeting_link, message: "Joining session... Attendance will be marked automatically after session ends." });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1271,6 +1426,161 @@ app.get("/monitoring/summary", authenticateToken, authorizeRole("MONITORING_OFFI
   }
 });
 
+// --- Institutions Endpoints ---
+app.get("/institutions", authenticateToken, async (req, res) => {
+  try {
+    const institutions = await prisma.user.findMany({
+      where: { role: "INSTITUTION" },
+      select: { 
+        id: true, 
+        name: true, 
+        displayId: true,
+        email: true,
+        role: true,
+        created_at: true,
+        createdByStudent: true,
+        hasCredentials: true,
+        tempPassword: true
+      },
+      orderBy: { name: 'asc' }
+    });
+    
+    res.json(institutions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create new institution (Programme Manager only)
+app.post("/institutions", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN"), async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    
+    // Check if institution already exists
+    const existingInstitution = await prisma.user.findUnique({ where: { email } });
+    if (existingInstitution) {
+      return res.status(400).json({ message: "Institution with this email already exists" });
+    }
+    
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const displayId = await generateDisplayId('USER', 'INSTITUTION');
+    
+    const institution = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role: 'INSTITUTION',
+        displayId,
+        createdByStudent: false,
+        hasCredentials: true,
+        tempPassword: null
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        displayId: true,
+        role: true,
+        createdByStudent: true,
+        hasCredentials: true,
+        tempPassword: true,
+        created_at: true
+      }
+    });
+    
+    res.status(201).json({ message: "Institution created successfully", institution });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update institution (Programme Manager only)
+app.put("/institutions/:id", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, password } = req.body;
+    
+    const institution = await prisma.user.findUnique({
+      where: { id: parseInt(id) }
+    });
+    
+    if (!institution) {
+      return res.status(404).json({ message: "Institution not found" });
+    }
+    
+    if (institution.role !== 'INSTITUTION') {
+      return res.status(400).json({ message: "User is not an institution" });
+    }
+    
+    // Check if email is being changed and if it already exists
+    if (email && email !== institution.email) {
+      const existingEmail = await prisma.user.findUnique({ where: { email } });
+      if (existingEmail) {
+        return res.status(400).json({ message: "Email already exists" });
+      }
+    }
+    
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (password) updateData.password = await bcrypt.hash(password, 10);
+    
+    const updatedInstitution = await prisma.user.update({
+      where: { id: parseInt(id) },
+      data: updateData,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        displayId: true,
+        role: true,
+        createdByStudent: true,
+        hasCredentials: true,
+        tempPassword: true,
+        created_at: true
+      }
+    });
+    
+    res.json({ message: "Institution updated successfully", institution: updatedInstitution });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete institution (Programme Manager only)
+app.delete("/institutions/:id", authenticateToken, authorizeRole("PROGRAMME_MANAGER", "ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const institutionId = parseInt(id);
+    
+    const institution = await prisma.user.findUnique({
+      where: { id: institutionId }
+    });
+    
+    if (!institution) {
+      return res.status(404).json({ message: "Institution not found" });
+    }
+    
+    if (institution.role !== 'INSTITUTION') {
+      return res.status(400).json({ message: "User is not an institution" });
+    }
+    
+    // Delete related records first to avoid foreign key constraint errors
+    await prisma.$transaction([
+      prisma.notification.deleteMany({ where: { user_id: institutionId } }),
+      prisma.batchStudent.deleteMany({ where: { student: { institution_id: institutionId } } }),
+      prisma.batchTrainer.deleteMany({ where: { trainer: { institution_id: institutionId } } }),
+      prisma.batch.deleteMany({ where: { institution_id: institutionId } }),
+      prisma.user.delete({ where: { id: institutionId } })
+    ]);
+
+    res.json({ message: "Institution deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/users/me", authenticateToken, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
@@ -1546,10 +1856,15 @@ app.get("/institution/attendance-stats", authenticateToken, authorizeRole("INSTI
 
     const overallAttendanceRate = possibleAttendances > 0 ? (totalAttendances / possibleAttendances) * 100 : 0;
 
+    const totalStudents = await prisma.user.count({ where: { role: "STUDENT", institution_id: req.user.id } });
+    const totalTrainers = await prisma.user.count({ where: { role: "TRAINER", institution_id: req.user.id } });
+
     res.json({
       total_batches: batches.length,
       total_sessions: totalSessions,
       overall_attendance_rate: Math.round(overallAttendanceRate * 10) / 10,
+      total_students: totalStudents,
+      total_trainers: totalTrainers,
       batch_stats: batchStats
     });
   } catch (err) {
@@ -1562,23 +1877,27 @@ app.get("/pm/attendance-stats", authenticateToken, authorizeRole("PROGRAMME_MANA
   try {
     const institutions = await prisma.user.findMany({
       where: { role: "INSTITUTION" },
-      include: {
-        batches: {
-          include: {
-            sessions: {
-              include: {
-                attendance: true
-              }
-            },
-            students: true,
-            trainers: true
-          }
-        }
-      }
+      select: { id: true, name: true }
     });
 
     const institutionStats = await Promise.all(institutions.map(async (institution) => {
-      const batches = institution.batches;
+      const batches = await prisma.batch.findMany({
+        where: { institution_id: institution.id },
+        include: {
+          sessions: {
+            include: {
+              attendance: true
+            }
+          },
+          students: {
+            include: { student: { select: { id: true } } }
+          },
+          trainers: {
+            include: { trainer: { select: { id: true } } }
+          }
+        }
+      });
+
       let totalSessions = 0;
       let totalAttendances = 0;
       let possibleAttendances = 0;
@@ -1599,14 +1918,17 @@ app.get("/pm/attendance-stats", authenticateToken, authorizeRole("PROGRAMME_MANA
 
       const attendanceRate = possibleAttendances > 0 ? (totalAttendances / possibleAttendances) * 100 : 0;
 
+      const instStudents = await prisma.user.count({ where: { role: "STUDENT", institution_id: institution.id } });
+      const instTrainers = await prisma.user.count({ where: { role: "TRAINER", institution_id: institution.id } });
+
       return {
         institution_id: institution.id,
         institution_name: institution.name,
         total_batches: batches.length,
         total_sessions: totalSessions,
         attendance_rate: Math.round(attendanceRate * 10) / 10,
-        total_students: batches.reduce((sum, batch) => sum + batch.students.length, 0),
-        total_trainers: batches.reduce((sum, batch) => sum + batch.trainers.length, 0)
+        total_students: instStudents,
+        total_trainers: instTrainers
       };
     }));
 
@@ -1638,23 +1960,27 @@ app.get("/mo/attendance-stats", authenticateToken, authorizeRole("MONITORING_OFF
     // Same data as Programme Manager but for read-only access
     const institutions = await prisma.user.findMany({
       where: { role: "INSTITUTION" },
-      include: {
-        batches: {
-          include: {
-            sessions: {
-              include: {
-                attendance: true
-              }
-            },
-            students: true,
-            trainers: true
-          }
-        }
-      }
+      select: { id: true, name: true }
     });
 
     const institutionStats = await Promise.all(institutions.map(async (institution) => {
-      const batches = institution.batches;
+      const batches = await prisma.batch.findMany({
+        where: { institution_id: institution.id },
+        include: {
+          sessions: {
+            include: {
+              attendance: true
+            }
+          },
+          students: {
+            include: { student: { select: { id: true } } }
+          },
+          trainers: {
+            include: { trainer: { select: { id: true } } }
+          }
+        }
+      });
+
       let totalSessions = 0;
       let totalAttendances = 0;
       let possibleAttendances = 0;
@@ -1675,14 +2001,17 @@ app.get("/mo/attendance-stats", authenticateToken, authorizeRole("MONITORING_OFF
 
       const attendanceRate = possibleAttendances > 0 ? (totalAttendances / possibleAttendances) * 100 : 0;
 
+      const instStudents = await prisma.user.count({ where: { role: "STUDENT", institution_id: institution.id } });
+      const instTrainers = await prisma.user.count({ where: { role: "TRAINER", institution_id: institution.id } });
+
       return {
         institution_id: institution.id,
         institution_name: institution.name,
         total_batches: batches.length,
         total_sessions: totalSessions,
         attendance_rate: Math.round(attendanceRate * 10) / 10,
-        total_students: batches.reduce((sum, batch) => sum + batch.students.length, 0),
-        total_trainers: batches.reduce((sum, batch) => sum + batch.trainers.length, 0)
+        total_students: instStudents,
+        total_trainers: instTrainers
       };
     }));
 
@@ -1720,16 +2049,44 @@ app.get("/api/sessions", authenticateToken, async (req, res) => {
         include: { batch: true },
         orderBy: { date: 'asc' }
       });
+
+      // --- Lazy auto-mark attendance for completed sessions ---
+      const now = new Date();
+      for (const s of rawSessions) {
+        const sDate = new Date(s.date);
+        const isSameDay = sDate.toDateString() === now.toDateString();
+        const endMins = parseTimeToMinutes(s.end_time);
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const isCompleted = sDate < now && !isSameDay || (isSameDay && nowMins > endMins);
+
+        if (isCompleted) {
+          const pendingJoin = await prisma.sessionJoin.findUnique({
+            where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } }
+          });
+          if (pendingJoin && !pendingJoin.marked) {
+            await prisma.attendance.upsert({
+              where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } },
+              update: { status: 'PRESENT' },
+              create: { session_id: s.id, student_id: req.user.id, status: 'PRESENT' }
+            });
+            await prisma.sessionJoin.update({
+              where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } },
+              data: { marked: true }
+            });
+          }
+        }
+      }
+      // --- End auto-mark ---
+
       // Attach each student's own attendance and join records
       sessions = await Promise.all(rawSessions.map(async s => {
         const att = await prisma.attendance.findUnique({
           where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } }
         });
-        // Temporarily commented out until SessionJoin table is created via migration
-        // const join = await prisma.sessionJoin.findUnique({
-        //   where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } }
-        // });
-        return { ...s, myAttendance: att || null, myJoin: null };
+        const join = await prisma.sessionJoin.findUnique({
+          where: { session_id_student_id: { session_id: s.id, student_id: req.user.id } }
+        });
+        return { ...s, myAttendance: att || null, myJoin: join || null };
       }));
     } else if (req.user.role === "TRAINER") {
       sessions = await prisma.session.findMany({ where: { trainer_id: req.user.id }, include: { batch: true, _count: { select: { attendance: true } } }, orderBy: { date: 'desc' } });
@@ -1835,14 +2192,17 @@ app.get("/api/pm/attendance-stats", authenticateToken, authorizeRole("PROGRAMME_
 
       const attendanceRate = possibleAttendances > 0 ? (totalAttendances / possibleAttendances) * 100 : 0;
 
+      const instStudents = await prisma.user.count({ where: { role: "STUDENT", institution_id: institution.id } });
+      const instTrainers = await prisma.user.count({ where: { role: "TRAINER", institution_id: institution.id } });
+
       return {
         institution_id: institution.id,
         institution_name: institution.name,
         total_batches: batches.length,
         total_sessions: totalSessions,
         attendance_rate: Math.round(attendanceRate * 10) / 10,
-        total_students: batches.reduce((sum, batch) => sum + batch.students.length, 0),
-        total_trainers: batches.reduce((sum, batch) => sum + batch.trainers.length, 0)
+        total_students: instStudents,
+        total_trainers: instTrainers
       };
     }));
 
@@ -1993,12 +2353,16 @@ app.get("/api/institution/attendance-stats", authenticateToken, authorizeRole("I
       };
     }));
 
+    const totalStudents = await prisma.user.count({ where: { role: "STUDENT", institution_id: req.user.id } });
+    const totalTrainers = await prisma.user.count({ where: { role: "TRAINER", institution_id: req.user.id } });
+
     const overallStats = batchStats.reduce((acc, batch) => ({
       total_batches: batches.length,
-      total_sessions: acc.total_sessions + batch.total_sessions,
-      total_students: acc.total_students + batch.student_count,
-      total_trainers: acc.total_trainers + batch.trainer_count
-    }), { total_sessions: 0, total_students: 0, total_trainers: 0 });
+      total_sessions: acc.total_sessions + batch.total_sessions
+    }), { total_sessions: 0 });
+
+    overallStats.total_students = totalStudents;
+    overallStats.total_trainers = totalTrainers;
 
     const overallAttendanceRate = batchStats.length > 0 
       ? batchStats.reduce((sum, batch) => sum + batch.attendance_rate, 0) / batchStats.length 

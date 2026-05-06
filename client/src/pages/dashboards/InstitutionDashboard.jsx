@@ -56,7 +56,7 @@ export default function InstitutionDashboard() {
           { label: 'Total Batches', value: attendanceStats?.total_batches || 0, icon: BookOpen, color: 'blue' },
           { label: 'Total Sessions', value: attendanceStats?.total_sessions || 0, icon: Calendar, color: 'purple' },
           { label: 'Avg Attendance', value: `${attendanceStats?.overall_attendance_rate || 0}%`, icon: Activity, color: 'orange' },
-          { label: 'Total Students', value: attendanceStats?.batch_stats?.reduce((sum, batch) => sum + batch.student_count, 0) || 0, icon: Users, color: 'emerald' }
+          { label: 'Total Students', value: attendanceStats?.total_students || 0, icon: Users, color: 'emerald' }
         ].map((card, i) => (
           <motion.div 
             key={i}
@@ -148,14 +148,14 @@ export default function InstitutionDashboard() {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Total Students</span>
                 <span className="text-lg font-bold text-gray-900">
-                  {attendanceStats?.batch_stats?.reduce((sum, batch) => sum + batch.student_count, 0) || 0}
+                  {attendanceStats?.total_students || 0}
                 </span>
               </div>
               
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Total Trainers</span>
                 <span className="text-lg font-bold text-gray-900">
-                  {attendanceStats?.batch_stats?.reduce((sum, batch) => sum + batch.trainer_count, 0) || 0}
+                  {attendanceStats?.total_trainers || 0}
                 </span>
               </div>
               
