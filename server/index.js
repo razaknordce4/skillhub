@@ -1,14 +1,28 @@
 // Trigger restart
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const nodemailer = require("nodemailer");
 const { PrismaClient } = require("@prisma/client");
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "skillbridge_super_secret_key_123";
+
+// --- Nodemailer transporter (reads from .env) ---
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SMTP_EMAIL,
+    pass: process.env.SMTP_PASSWORD
+  }
+});
+
+// --- In-memory OTP store: { email -> { otp, expiresAt, role } } ---
+const otpStore = {};
 
 
 // --- ID Generation Helper ---
@@ -164,6 +178,20 @@ app.post("/auth/signup", async (req, res) => {
   }
 });
 
+// --- Public: List all institutions (for Register page, no auth required) ---
+app.get("/institutions", async (req, res) => {
+  try {
+    const institutions = await prisma.user.findMany({
+      where: { role: "INSTITUTION" },
+      select: { id: true, name: true, displayId: true },
+      orderBy: { name: "asc" }
+    });
+    res.json(institutions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -225,6 +253,103 @@ app.post("/auth/change-password", authenticateToken, async (req, res) => {
     });
 
     res.json({ message: "Password changed successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Forgot Password: Send OTP ---
+app.post("/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(404).json({ message: "No account found with this email" });
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    otpStore[email] = { otp, expiresAt, role: user.role, userId: user.id };
+
+    // Send OTP email
+    const roleLabel = user.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    await transporter.sendMail({
+      from: `"SkillBridge" <${process.env.SMTP_EMAIL}>`,
+      to: email,
+      subject: 'SkillBridge – Password Reset OTP',
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+          <div style="background:#2563eb;padding:24px 32px">
+            <h2 style="color:#fff;margin:0">SkillBridge</h2>
+            <p style="color:#bfdbfe;margin:4px 0 0">Password Reset Request</p>
+          </div>
+          <div style="padding:32px">
+            <p style="color:#374151">Hello, <strong>${user.name}</strong></p>
+            <p style="color:#374151">Your account role: <strong>${roleLabel}</strong></p>
+            <p style="color:#374151">Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+            <div style="text-align:center;margin:32px 0">
+              <span style="font-size:40px;font-weight:900;letter-spacing:12px;color:#1d4ed8;background:#eff6ff;padding:16px 32px;border-radius:12px;border:2px dashed #93c5fd">${otp}</span>
+            </div>
+            <p style="color:#6b7280;font-size:13px">If you did not request a password reset, please ignore this email.</p>
+          </div>
+        </div>
+      `
+    });
+
+    res.json({ message: `OTP sent to ${email}`, role: user.role });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Forgot Password: Verify OTP ---
+app.post("/auth/verify-otp", async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    const record = otpStore[email];
+    if (!record) return res.status(400).json({ message: "No OTP requested for this email" });
+    if (Date.now() > record.expiresAt) {
+      delete otpStore[email];
+      return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+    }
+    if (record.otp !== otp) return res.status(400).json({ message: "Invalid OTP" });
+
+    // OTP valid – issue a short-lived reset token
+    const resetToken = jwt.sign({ userId: record.userId, email, purpose: 'reset' }, JWT_SECRET, { expiresIn: '15m' });
+    res.json({ message: "OTP verified", resetToken });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- Forgot Password: Set New Password ---
+app.post("/auth/reset-password", async (req, res) => {
+  try {
+    const { resetToken, newPassword, confirmPassword } = req.body;
+    if (newPassword !== confirmPassword) return res.status(400).json({ message: "Passwords do not match" });
+    if (newPassword.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+
+    let decoded;
+    try {
+      decoded = jwt.verify(resetToken, JWT_SECRET);
+    } catch {
+      return res.status(400).json({ message: "Reset token is invalid or expired" });
+    }
+    if (decoded.purpose !== 'reset') return res.status(400).json({ message: "Invalid reset token" });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: decoded.userId },
+      data: { password: hashedPassword }
+    });
+
+    // Invalidate OTP
+    delete otpStore[decoded.email];
+
+    res.json({ message: "Password reset successfully. You can now log in." });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
