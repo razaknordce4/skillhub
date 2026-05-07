@@ -637,35 +637,7 @@ app.get("/users", authenticateToken, async (req, res) => {
   }
 });
 
-
 // --- Batch Endpoints ---
-app.get("/batches", authenticateToken, async (req, res) => {
-  try {
-    let where = {};
-    if (req.user.role === 'INSTITUTION') {
-      where = { institution_id: req.user.id };
-    } else if (req.user.role !== 'ADMIN' && req.user.role !== 'PROGRAMME_MANAGER') {
-      // For trainers, they might need to see batches they are assigned to
-      if (req.user.role === 'TRAINER') {
-        const assignments = await prisma.batchTrainer.findMany({
-          where: { trainer_id: req.user.id },
-          select: { batch_id: true }
-        });
-        where = { id: { in: assignments.map(a => a.batch_id) } };
-      } else {
-        return res.status(403).json({ message: "Forbidden" });
-      }
-    }
-    
-    const batches = await prisma.batch.findMany({
-      where,
-      orderBy: { created_at: 'desc' }
-    });
-    res.json(batches);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // --- Notifications Endpoints ---
 app.get("/notifications", authenticateToken, async (req, res) => {
@@ -1029,25 +1001,48 @@ app.get("/batches", authenticateToken, async (req, res) => {
   try {
     let batches;
     if (req.user.role === "STUDENT") {
-      const studentBatches = await prisma.batchStudent.findMany({ where: { student_id: req.user.id }, include: { batch: { include: { trainers: { include: { trainer: true } } } } } });
-      batches = studentBatches.map(sb => sb.batch);
-    } else if (req.user.role === "TRAINER") {
-      const trainerBatches = await prisma.batchTrainer.findMany({ where: { trainer_id: req.user.id }, include: { batch: true } });
-      batches = trainerBatches.map(tb => tb.batch);
-    } else if (req.user.role === "INSTITUTION") {
-      batches = await prisma.batch.findMany({ 
-        where: { institution_id: req.user.id },
-        include: { 
-          trainers: { include: { trainer: true } },
-          _count: { select: { students: true } }
+      const studentBatches = await prisma.batchStudent.findMany({
+        where: { student_id: req.user.id },
+        include: {
+          batch: {
+            include: {
+              trainers: { include: { trainer: true } },
+              _count: { select: { students: true } }
+            }
+          }
         }
       });
-    } else {
+      batches = studentBatches.map(sb => sb.batch);
+    } else if (req.user.role === "TRAINER") {
+      const trainerBatches = await prisma.batchTrainer.findMany({
+        where: { trainer_id: req.user.id },
+        include: {
+          batch: {
+            include: {
+              trainers: { include: { trainer: true } },
+              _count: { select: { students: true } }
+            }
+          }
+        }
+      });
+      batches = trainerBatches.map(tb => tb.batch);
+    } else if (req.user.role === "INSTITUTION") {
       batches = await prisma.batch.findMany({
-        include: { 
+        where: { institution_id: req.user.id },
+        include: {
           trainers: { include: { trainer: true } },
           _count: { select: { students: true } }
-        }
+        },
+        orderBy: { created_at: 'desc' }
+      });
+    } else {
+      // ADMIN, PROGRAMME_MANAGER, MONITORING_OFFICER
+      batches = await prisma.batch.findMany({
+        include: {
+          trainers: { include: { trainer: true } },
+          _count: { select: { students: true } }
+        },
+        orderBy: { created_at: 'desc' }
       });
     }
     res.json(batches);
@@ -1055,6 +1050,7 @@ app.get("/batches", authenticateToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.get("/batches/:id", authenticateToken, async (req, res) => {
   try {
