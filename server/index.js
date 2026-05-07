@@ -14,10 +14,16 @@ const JWT_SECRET = process.env.JWT_SECRET || "skillbridge_super_secret_key_123";
 
 // --- Nodemailer transporter (reads from .env) ---
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // STARTTLS (not SSL) — works on Render
+  family: 4,     // Force IPv4 — Render has IPv6 issues with Gmail SMTP
   auth: {
     user: process.env.SMTP_EMAIL,
     pass: process.env.SMTP_PASSWORD
+  },
+  tls: {
+    rejectUnauthorized: false
   }
 });
 
@@ -273,9 +279,12 @@ app.post("/auth/forgot-password", async (req, res) => {
 
     otpStore[email] = { otp, expiresAt, role: user.role, userId: user.id };
 
-    // Send OTP email
+    // Respond immediately — don't block on SMTP
+    res.json({ message: `OTP sent to ${email}`, role: user.role });
+
+    // Send OTP email asynchronously (fire-and-forget)
     const roleLabel = user.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    await transporter.sendMail({
+    transporter.sendMail({
       from: `"SkillBridge" <${process.env.SMTP_EMAIL}>`,
       to: email,
       subject: 'SkillBridge – Password Reset OTP',
@@ -296,9 +305,10 @@ app.post("/auth/forgot-password", async (req, res) => {
           </div>
         </div>
       `
+    }).catch(err => {
+      console.error('Failed to send OTP email:', err.message);
     });
 
-    res.json({ message: `OTP sent to ${email}`, role: user.role });
   } catch (err) {
     console.error('Forgot password error:', err);
     res.status(500).json({ error: err.message });
