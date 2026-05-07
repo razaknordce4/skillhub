@@ -15,16 +15,19 @@ const JWT_SECRET = process.env.JWT_SECRET || "skillbridge_super_secret_key_123";
 // --- Nodemailer transporter (reads from .env) ---
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // STARTTLS (not SSL) — works on Render
-  family: 4,     // Force IPv4 — Render has IPv6 issues with Gmail SMTP
+  port: 465,
+  secure: true, // Use SSL on port 465
+  family: 4,    // Force IPv4 to avoid Render's IPv6 connectivity issues
   auth: {
     user: process.env.SMTP_EMAIL,
     pass: process.env.SMTP_PASSWORD
   },
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  connectionTimeout: 10000, // 10 seconds timeout
+  greetingTimeout: 10000,
+  socketTimeout: 15000
 });
 
 // --- In-memory OTP store: { email -> { otp, expiresAt, role } } ---
@@ -334,9 +337,11 @@ app.post("/auth/forgot-password", async (req, res) => {
             <td style="padding:0 32px 32px;">
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
-                  <td align="center" style="background:#eff6ff;border:2px dashed #93c5fd;border-radius:14px;padding:24px 16px;">
+                  <td align="center" style="background:#eff6ff;border:2px dashed #93c5fd;border-radius:14px;padding:24px 10px;">
                     <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#3b82f6;letter-spacing:2px;text-transform:uppercase;">Your OTP Code</p>
-                    <p style="margin:0;font-size:42px;font-weight:900;letter-spacing:14px;color:#1d4ed8;line-height:1;">${otp}</p>
+                    <div style="margin:0;font-size:36px;font-weight:900;letter-spacing:8px;color:#1d4ed8;line-height:1.2;word-break:break-all;">
+                      ${otp}
+                    </div>
                     <p style="margin:12px 0 0;font-size:12px;color:#6b7280;">Valid for 10 minutes only</p>
                   </td>
                 </tr>
@@ -3366,6 +3371,8 @@ app.listen(PORT, () => {
   transporter.verify((error, success) => {
     if (error) {
       console.error('❌ SMTP connection failed:', error.message);
+      console.log('💡 TIP: Render blocks outbound SMTP (ports 25, 465, 587) on the FREE tier.');
+      console.log('   If you are on the free tier, consider using an HTTP-based Email API like Resend or SendGrid.');
       console.error('   Check SMTP_EMAIL and SMTP_PASSWORD env vars on Render.');
     } else {
       console.log('✅ SMTP connection verified — OTP emails will work.');
