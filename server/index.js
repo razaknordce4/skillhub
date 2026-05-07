@@ -4,31 +4,14 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-const nodemailer = require("nodemailer");
 const { PrismaClient } = require("@prisma/client");
+const { Resend } = require('resend');
 
 const app = express();
 const prisma = new PrismaClient();
+const resend = new Resend(process.env.RESEND_API_KEY);
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "skillbridge_super_secret_key_123";
-
-// --- Nodemailer transporter (reads from .env) ---
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // Use SSL on port 465
-  family: 4,    // Force IPv4 to avoid Render's IPv6 connectivity issues
-  auth: {
-    user: process.env.SMTP_EMAIL,
-    pass: process.env.SMTP_PASSWORD
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  connectionTimeout: 10000, // 10 seconds timeout
-  greetingTimeout: 10000,
-  socketTimeout: 15000
-});
 
 // --- In-memory OTP store: { email -> { otp, expiresAt, role } } ---
 const otpStore = {};
@@ -287,9 +270,9 @@ app.post("/auth/forgot-password", async (req, res) => {
 
     // Send OTP email asynchronously (fire-and-forget)
     const roleLabel = user.role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    transporter.sendMail({
-      from: `"SkillBridge" <${process.env.SMTP_EMAIL}>`,
-      to: email,
+    resend.emails.send({
+      from: 'SkillBridge <onboarding@resend.dev>',
+      to: [email],
       subject: 'SkillBridge – Your Password Reset OTP',
       html: `
 <!DOCTYPE html>
@@ -378,9 +361,9 @@ app.post("/auth/forgot-password", async (req, res) => {
 </html>
       `
     }).then(() => {
-      console.log(`✅ OTP email sent to ${email}`);
+      console.log(`✅ OTP email sent to ${email} via Resend`);
     }).catch(err => {
-      console.error(`❌ Failed to send OTP email to ${email}:`, err.message);
+      console.error(`❌ Failed to send OTP email to ${email} via Resend:`, err.message);
     });
 
   } catch (err) {
@@ -3362,20 +3345,15 @@ setInterval(async () => {
   } catch (err) {
     console.error("Error auto-deleting todos:", err);
   }
-}, 24 * 60 * 60 * 1000); // Run every 24 hours
+}, 24 * 60 * 60 * 1000); 
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 
-  // Verify SMTP credentials on startup
-  transporter.verify((error, success) => {
-    if (error) {
-      console.error('❌ SMTP connection failed:', error.message);
-      console.log('💡 TIP: Render blocks outbound SMTP (ports 25, 465, 587) on the FREE tier.');
-      console.log('   If you are on the free tier, consider using an HTTP-based Email API like Resend or SendGrid.');
-      console.error('   Check SMTP_EMAIL and SMTP_PASSWORD env vars on Render.');
-    } else {
-      console.log('✅ SMTP connection verified — OTP emails will work.');
-    }
-  });
+  // Check Resend API Key
+  if (process.env.RESEND_API_KEY) {
+    console.log('✅ Resend API Key found — OTP emails will work via HTTP API.');
+  } else {
+    console.error('❌ Resend API Key missing. Please check your Render environment variables.');
+  }
 });
