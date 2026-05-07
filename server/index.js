@@ -287,26 +287,95 @@ app.post("/auth/forgot-password", async (req, res) => {
     transporter.sendMail({
       from: `"SkillBridge" <${process.env.SMTP_EMAIL}>`,
       to: email,
-      subject: 'SkillBridge – Password Reset OTP',
+      subject: 'SkillBridge – Your Password Reset OTP',
       html: `
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
-          <div style="background:#2563eb;padding:24px 32px">
-            <h2 style="color:#fff;margin:0">SkillBridge</h2>
-            <p style="color:#bfdbfe;margin:4px 0 0">Password Reset Request</p>
-          </div>
-          <div style="padding:32px">
-            <p style="color:#374151">Hello, <strong>${user.name}</strong></p>
-            <p style="color:#374151">Your account role: <strong>${roleLabel}</strong></p>
-            <p style="color:#374151">Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
-            <div style="text-align:center;margin:32px 0">
-              <span style="font-size:40px;font-weight:900;letter-spacing:12px;color:#1d4ed8;background:#eff6ff;padding:16px 32px;border-radius:12px;border:2px dashed #93c5fd">${otp}</span>
-            </div>
-            <p style="color:#6b7280;font-size:13px">If you did not request a password reset, please ignore this email.</p>
-          </div>
-        </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkillBridge OTP</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#f3f4f6;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+          style="max-width:520px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1d4ed8,#3b82f6);padding:28px 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td>
+                    <p style="margin:0;font-size:22px;font-weight:900;color:#ffffff;letter-spacing:-0.5px;">SkillBridge</p>
+                    <p style="margin:4px 0 0;font-size:13px;color:#bfdbfe;">Password Reset Request</p>
+                  </td>
+                  <td align="right">
+                    <div style="width:40px;height:40px;background:rgba(255,255,255,0.15);border-radius:10px;display:inline-block;text-align:center;line-height:40px;font-size:20px;">🔐</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 32px 24px;">
+              <p style="margin:0 0 8px;font-size:16px;color:#111827;">Hello, <strong>${user.name}</strong> 👋</p>
+              <p style="margin:0 0 4px;font-size:14px;color:#6b7280;">Account role: <strong style="color:#374151;">${roleLabel}</strong></p>
+              <p style="margin:16px 0 0;font-size:14px;color:#374151;line-height:1.6;">Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+            </td>
+          </tr>
+
+          <!-- OTP Box -->
+          <tr>
+            <td style="padding:0 32px 32px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td align="center" style="background:#eff6ff;border:2px dashed #93c5fd;border-radius:14px;padding:24px 16px;">
+                    <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#3b82f6;letter-spacing:2px;text-transform:uppercase;">Your OTP Code</p>
+                    <p style="margin:0;font-size:42px;font-weight:900;letter-spacing:14px;color:#1d4ed8;line-height:1;">${otp}</p>
+                    <p style="margin:12px 0 0;font-size:12px;color:#6b7280;">Valid for 10 minutes only</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Warning -->
+          <tr>
+            <td style="padding:0 32px 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td style="background:#fefce8;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;">
+                    <p style="margin:0;font-size:12px;color:#92400e;">⚠️ Never share this OTP with anyone. SkillBridge will never ask for your OTP.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#9ca3af;">If you did not request a password reset, you can safely ignore this email.</p>
+              <p style="margin:6px 0 0;font-size:11px;color:#d1d5db;">© 2026 SkillBridge. All rights reserved.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
       `
+    }).then(() => {
+      console.log(`✅ OTP email sent to ${email}`);
     }).catch(err => {
-      console.error('Failed to send OTP email:', err.message);
+      console.error(`❌ Failed to send OTP email to ${email}:`, err.message);
     });
 
   } catch (err) {
@@ -314,6 +383,7 @@ app.post("/auth/forgot-password", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // --- Forgot Password: Verify OTP ---
 app.post("/auth/verify-otp", async (req, res) => {
@@ -3291,4 +3361,14 @@ setInterval(async () => {
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  // Verify SMTP credentials on startup
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error('❌ SMTP connection failed:', error.message);
+      console.error('   Check SMTP_EMAIL and SMTP_PASSWORD env vars on Render.');
+    } else {
+      console.log('✅ SMTP connection verified — OTP emails will work.');
+    }
+  });
 });
