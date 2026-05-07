@@ -118,7 +118,7 @@ export default function ProgrammeManagerInstitutions() {
   
   const handleCreateInstitution = async () => {
     try {
-      await axios.post('/users', { ...createForm, role: 'INSTITUTION' });
+      await axios.post('/institutions', createForm);
       setToast({ type: 'success', message: 'Institution created successfully' });
       setShowCreateModal(false);
       setCreateForm({ name: '', email: '', password: '' });
@@ -141,7 +141,7 @@ export default function ProgrammeManagerInstitutions() {
   
   const saveEditInstitution = async () => {
     try {
-      await axios.put(`/users/${editingInstitution.id}`, { ...editForm, role: 'INSTITUTION' });
+      await axios.put(`/institutions/${editingInstitution.id}`, editForm);
       setToast({ type: 'success', message: 'Institution updated successfully' });
       setShowEditModal(false);
       setEditingInstitution(null);
@@ -160,7 +160,7 @@ export default function ProgrammeManagerInstitutions() {
   
   const confirmDeleteInstitution = async () => {
     try {
-      await axios.delete(`/users/${editingInstitution.id}`);
+      await axios.delete(`/institutions/${editingInstitution.id}`);
       setToast({ type: 'success', message: 'Institution deleted successfully' });
       setShowDeleteModal(false);
       setEditingInstitution(null);
