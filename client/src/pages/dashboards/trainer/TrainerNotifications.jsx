@@ -10,9 +10,9 @@ import {
 const TABS = ['Send Notification', 'Inbox'];
 
 const TARGET_OPTIONS = [
-  { value: 'ALL_MY_STUDENTS',   label: 'All My Students',       icon: Users,         group: 'Broadcast' },
-  { value: 'BATCH_STUDENTS',    label: 'Students in a Batch',   icon: BookOpen,      group: 'Broadcast', needsBatch: true },
-  { value: 'SPECIFIC_STUDENTS', label: 'Specific Students',     icon: UserCheck,     group: 'Direct',    needsUsers: true, userRole: 'STUDENT' },
+  { value: 'ALL_MY_STUDENTS', label: 'All My Students', icon: Users, group: 'Broadcast' },
+  { value: 'BATCH_STUDENTS', label: 'Students in a Batch', icon: BookOpen, group: 'Broadcast', needsBatch: true },
+  { value: 'SPECIFIC_STUDENTS', label: 'Specific Students', icon: UserCheck, group: 'Direct', needsUsers: true, userRole: 'STUDENT' },
 ];
 
 function Toast({ msg, type, onClose }) {
@@ -121,7 +121,7 @@ export default function TrainerNotifications() {
   const needsUsers = selectedOption?.needsUsers;
 
   useEffect(() => {
-    axios.get('/batches').then(res => setBatches(Array.isArray(res.data) ? res.data : [])).catch(() => {});
+    axios.get('/batches').then(res => setBatches(Array.isArray(res.data) ? res.data : [])).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -131,7 +131,7 @@ export default function TrainerNotifications() {
     setUserSearch('');
     axios.get(`/users?role=${selectedOption.userRole}`)
       .then(res => setUsers(Array.isArray(res.data) ? res.data : []))
-      .catch(() => {});
+      .catch(() => { });
   }, [targetType]);
 
   useEffect(() => {
@@ -153,7 +153,7 @@ export default function TrainerNotifications() {
         target_type: targetType,
         target_ids: needsBatch ? selectedBatches : needsUsers ? selectedUsers : undefined
       });
-      showToast(`✅ Sent to ${res.data.count} student(s)!`);
+      showToast(`  Sent to ${res.data.count} student(s)!`);
       setTitle(''); setMessage(''); setTargetType('');
       setSelectedBatches([]); setSelectedUsers([]);
     } catch (err) {
@@ -172,20 +172,20 @@ export default function TrainerNotifications() {
   }, [tab]);
 
   const markRead = async (id) => {
-    await axios.put(`/notifications/${id}/read`).catch(() => {});
+    await axios.put(`/notifications/${id}/read`).catch(() => { });
     setInbox(prev => prev.map(n => n.id === id ? { ...n, status: 'READ' } : n));
   };
   const markAllRead = async () => {
-    await axios.put('/notifications/read-all').catch(() => {});
+    await axios.put('/notifications/read-all').catch(() => { });
     setInbox(prev => prev.map(n => ({ ...n, status: 'READ' })));
   };
   const deleteOne = async (id) => {
-    await axios.delete(`/notifications/${id}`).catch(() => {});
+    await axios.delete(`/notifications/${id}`).catch(() => { });
     setInbox(prev => prev.filter(n => n.id !== id));
     setConfirmDeleteId(null);
   };
   const deleteAll = async () => {
-    await axios.delete('/notifications').catch(() => {});
+    await axios.delete('/notifications').catch(() => { });
     setInbox([]);
     setConfirmDeleteAll(false);
   };
